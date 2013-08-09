@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset=utf-8 />
+		<title>User-side</title>
+		<style>		
+			body {
+			  font-family: "calibri";
+			}
+
+			#localVideo {
+				border: 1px solid black;
+				position: fixed;
+				height: 30%;
+				max-width: 100%;
+				bottom: 0px;
+				right: 0px;
+				z-index: 1;
+				transform: rotateY(180deg);
+			}
+
+
+			#remoteVideo {
+				border: 1px solid black;
+				position: fixed;
+				max-width: 50%;
+				height: 30%;
+				bottom: 30%;
+				right: 0px;
+				z-index: 0;
+			}
+			
+			#container {
+				position: fixed;
+				top: 0px;
+				left: 0px;
+				height: 100%;
+				width: 350px;
+				background: rgba(0, 0, 255, 0.2);
+				padding-left: 20px;
+				box-shadow: 0px 0px 5px #222222;
+			}
+
+
+			#rules {
+				position: fixed;
+				bottom: 50px;
+				left: 20px;
+			}
+
+			#logdiv {
+				position: fixed;
+				left: 400px;
+				line-height: 12px;
+			}
+		</style>
+	</head>
+	
+	<video id="localVideo" hidden=true></video>
+	<video id="remoteVideo" hidden=true></video>
+	
+	<body bgcolor="#EEEEFF">
+		<div id="container">
+			<h2>User-side of my WebRTC tool</h2>
+		
+			<p id="step">Waiting for the user medias (Audio + video)</p>
+			
+			<input type="text" name="keyForm" id="keyForm" hidden=true placeholder="Desired keyword">
+			<button id="button" hidden=true></button>
+			<br><br><br>
+			<button id="recordAudioButton" hidden=true></button>
+			<button id="takePhotoButton" hidden=true></button><br>
+			<button onclick='logdiv.innerHTML = "<b>Recordings:</b>"'>Clear recordings</button>
+
+			
+		</div>
+		<div id="logdiv" hudden=true><b>Recordings:</b></div>
+		<script type="text/javascript"
+			src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+			
+		<script>
+			
+					// global var
+			var localStream,
+				remoteStream,
+				offer,
+				answer,
+				peerConnection,
+				dataChannel,
+				pingInterval,
+				pingDate,
+				ping = 0,
+				key,
+				flagmessage = false,
+				ip = 'rtctest.lolnet.org',
+				recordingType,
+
+				timeoutSTUN,
+				intervalAnswer,
+				timeoutReplay,
+				recordLength = 4000,
+				timeoutDisconnect,
+
+				localVideo = document.getElementById("localVideo"),
+				remoteVideo = document.getElementById("remoteVideo"),
+				button = document.getElementById("button"),
+				keyForm = document.getElementById("keyForm"),
+				step = document.getElementById('step'),
+
+				logdiv = document.getElementById('logdiv'),
+				recordAudioButton = document.getElementById('recordAudioButton'),
+				takePhotoButton = document.getElementById('takePhotoButton');
+			
+			localVideo.muted = 'muted';
+			remoteVideo.muted = 'muted';
+			
+			function setChannelEvents(channel) {
+				channel.onmessage = function (event) {
+					if (event.data == "ping") {
+						channel.send("pong");
+
+						try{clearTimeout(timeoutDisconnect);}catch(err){}
+
+						timeoutDisconnect = setTimeout(function() {
+							reset();
+							step.innerHTML = "<font color='red'>Connection Timeout</font>";
+						},5011);
+					}
+
+
+					else if (event.data == "conversation_ended")  {
+						flagmessage = true;
+						reset();
+					}
+
+
+					else if (typeof event.data != "string" && recordingType=='audio') {
+						recordingType = null;
+						var reader = new FileReader();
+						reader.onload = function(e) {
+							var audioElement = document.createElement('audio');
+							audioElement.controls = "controls";
+							logdiv.innerHTML += "<br><br>";
+							logdiv.appendChild(audioElement);
+							audioElement.src = e.target.result;
+							audioElement.play();
+							recordAudioButton.innerHTML = "Playing audio...";
+							audioElement.addEventListener('ended', function () {
+		   						recordAudioButton.innerHTML = "Record audio!";
+								recordAudioButton.disabled = false;
+								takePhotoButton.disabled = false;
+								
+		   					}, false);
+						};
+						reader.readAsDataURL(event.data);
+					}
+
+
+					else if (recordingType == "photo") {
+						recordingType = null;
+						var img = document.createElement('img');
+						img.src = event.data;
+						img.height = 120;
+						img.width = 160;
+						logdiv.innerHTML += "<br><br>";
+						logdiv.appendChild(img);
+						takePhotoButton.disabled = false;
+						recordAudioButton.disabled = false;
+						takePhotoButton.innerHTML = 'Take photo!';
+					}
+					
+				};
+				channel.onopen = function () {
+					channel.send('dataChannel set up');
+				};
+			}
+
+
+
+
+			navigator.mozGetUserMedia({video: true, audio: true},function(stream){
+				localStream = stream;
+				localVideo.src = URL.createObjectURL(localStream);
+				localVideo.play();
+				localVideo.hidden = false;
+				keyForm.hidden = false;
+				step.innerHTML = "Please enter a keyword for the conversation"
+			
+				button.hidden = false;
+				button.onclick = start;
+				button.innerHTML = "Call";
+			},console.error);
+			
+
+			function start() {
+				button.onclick = reset;
+				button.innerHTML = "Reset";
+
+				peerConnection = new mozRTCPeerConnection();// setting up the peerConnection
+				peerConnection.addStream(localStream);
+				peerConnection.onaddstream = playRemoteStream;
+				dataChannel = peerConnection.createDataChannel('channel', {});
+				dataChannel.binaryType = 'blob';
+				setChannelEvents(dataChannel);
+
+
+				keyForm.hidden = true;
+				key = keyForm.value;
+
+				step.innerHTML = "Creating offer...";
+
+				// Creating a timeout to check if the connection to the STUN server is taking too long
+				timeoutSTUN = setTimeout(function(){
+					var tmpkey = key;
+					reset();
+					key = tmpkey;
+					keyForm.hidden = true;
+
+					step.innerHTML = "<font color='red'>Could not connect to stun server</font>";
+					button.innerHTML = "Try again";
+					throw "Stop Execution (Not an error)";
+				},5000);
+				peerConnection.createOffer(function(localDesc) {
+					offer = localDesc;
+					clearTimeout(timeoutSTUN);
+					timeoutSTUN = null;
+					peerConnection.setLocalDescription(localDesc, function() {
+						step.innerHTML = "Sending offer...";
+						$.post('http://'+ip+'/send_offer',
+							{"key":key,"offer":{"type":offer.type,"sdp":offer.sdp}});
+						step.innerHTML = "Asking for answer with key \"<code>" + key + "</code>\" ...";
+						intervalAnswer = setInterval(askAnswer,2001);
+					}, console.error);
+				}, console.error);
+			}
+			
+			function askAnswer(adress){
+				$.ajax({
+					url: 'http://'+ip+'/ask_for_answer?key='+key,
+					dataType: "jsonp",
+					jsonpCallback: "callback",
+					success: function(data) {
+						answer = data.replace(/\r\n/g,"\\r\\n");						
+						if (answer != "Nope.avi") {
+							clearInterval(intervalAnswer);
+							intervalAnswer = null;
+							peerConnection.setRemoteDescription(new mozRTCSessionDescription(JSON.parse(answer)));
+						}
+					}
+				});
+			}
+
+
+			function playRemoteStream(event) {
+				step.innerHTML = "The call is now active";
+
+				remoteStream = event.stream;
+				remoteVideo.src = URL.createObjectURL(remoteStream);
+				remoteVideo.play();
+				remoteVideo.hidden = false;
+			
+				button.hidden = false;
+				button.onclick = reset;
+				button.innerHTML = "Reset";
+
+				recordAudioButton.hidden = false;
+				recordAudioButton.innerHTML = "Record audio!";
+				recordAudioButton.onclick = function(){
+					dataChannel.send('recordAudio_'+recordLength);
+					takePhotoButton.disabled = true;
+					recordAudioButton.disabled = true;
+					recordAudioButton.innerHTML = "Recording audio...";
+					recordingType = "audio";
+				}
+
+				takePhotoButton.hidden = false;
+				takePhotoButton.innerHTML = "Take photo!";
+				takePhotoButton.onclick = function(){
+					dataChannel.send('takePhoto');
+					recordAudioButton.disabled = true;
+					takePhotoButton.disabled = true;
+					takePhotoButton.innerHTML = "Waiting for photo...";
+					recordingType = "photo";
+				}
+
+				timeoutDisconnect = setTimeout(function() {
+					reset();
+					step.innerHTML = "<font color='red'>DataChannel could not be etablished</font>";
+				},10011)
+				
+			}
+
+			function reset() {
+				remoteVideo.hidden = true;
+				remoteStream = null;
+
+				offer = null;
+				answer = null;	
+				
+				if (!flagmessage) {
+					try{dataChannel.send("conversation_ended");}catch(err){}
+				}
+
+				flagmessage = false;
+
+				try{peerConnection.close();}catch(err){}
+				peerConnection = null;
+
+				try{clearInterval(intervalAnswer);}catch(err){}
+				intervalAnswer = null;
+
+				try{clearTimeout(timeoutSTUN);}catch(err){}
+				timeoutSTUN = null;
+
+				try{clearTimeout(timeoutReplay);}catch(err){}
+				timeoutReplay = null;
+
+				try{clearTimeout(timeoutDisconnect);}catch(err){}
+				timeoutDisconnect = null;
+				
+				logdiv.innerHTML = "<b>Audio Recordings:</b>";
+
+				$.post('http://'+ip+'/reset?key='+key)
+				
+				key = null;
+				keyForm.hidden = false;
+
+				recordingType = null;
+			
+				step.innerHTML = "Call ended"
+				button.onclick = start;
+				button.innerHTML = "Call";
+
+				recordAudioButton.hidden = true;
+				recordAudioButton.disabled = false;
+				recordAudioButton.innerHTML = "Record audio!";
+				recordAudioButton.onclick = function(){};
+
+				takePhotoButton.hidden = true;
+				takePhotoButton.disabled = false;
+				takePhotoButton.innerHTML = "Record video!";
+				takePhotoButton.onclick = function(){};
+				videoRecordResult = [];
+			}
+				
+			
+			
+		</script>
+	</body>
+</html>
