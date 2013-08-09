@@ -52,12 +52,6 @@
 				bottom: 50px;
 			}
 
-			#rules {
-				position: fixed;
-				bottom: 50px;
-				left: 15px;
-			}
-
 			#bottomlog {
 				position: fixed;
 				bottom: 20px;
@@ -79,9 +73,9 @@
 			<button id="button" hidden=true></button>
 			
 			<br><br><br><br>
-			<button id="showOffer">Show offer</button>
-			<button id="showAnswer">Show answer</button>
-			<button id="logButton">Clear log</button>
+			<button id="offerButton">Show offer</button>
+			<button id="answerButton">Show answer</button>
+			<button onclick="logdiv.innerHTML = '';">Clear log</button>
 			<br><br>
 			<div id="pingdiv">Ping:</div>
 		</div>
@@ -104,103 +98,67 @@
 			</b>
 			<div style="color:red;font-size: 150%;" id="relevancy"></div>
 		</div>
-		<script type="text/javascript"
+	</body>
+
+	<script type="text/javascript"
 			src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 
-		<script type="text/javascript">
+	<script type="text/javascript">
 
+		var localStream,
+			remoteStream,
+			offer,
+			answer,
+			peerConnection,
+			dataChannel;
 
+		var pingInterval,
+			pingDate,
+			ping = 0;
 
-
-			var localStream,
-				remoteStream,
-				offer,
-				answer,
-				peerConnection,
-				dataChannel,
-				pingInterval,
-				pingDate,
-				ping = 0,
-				key,
-				flagmessage = false;
-
-			var ip = 'rtctest.lolnet.org';
-
-			var	timeoutSTUN,
-				intervalOffer,
-				timeoutDisconnect;
-				
-				
-			var localVideo = document.getElementById("localVideo"),
-				remoteVideo = document.getElementById("remoteVideo"),
-				button = document.getElementById("button"),
-				keyForm = document.getElementById("keyForm"),
-				step = document.getElementById('step');
-
-			var hostIP = document.getElementById('hostIP'),
-				stunIP = document.getElementById('stunIP'),
-				iptable = document.getElementById("iptable"),
-				relevancy = document.getElementById('relevancy'),
-				logdiv = document.getElementById('logdiv'),
-				pingdiv = document.getElementById('pingdiv'),
-				canvas = document.getElementById('canvas');
-
-			var context = canvas.getContext('2d');
-
-			var canvasWidth = 640;
-			var canvasHeight = 480;
-			canvas.width = canvasWidth;
-			canvas.height = canvasHeight;
-
-				
-			localVideo.muted = 'muted';
-			remoteVideo.muted = 'muted';
-
-			function setChannelEvents(channel) {
-				channel.onmessage = function (event) {
-					if (event.data == "pong") {
-
-						ping = new Date().getTime() - pingDate;
-						pingDate = null;
-						pingdiv.innerHTML = "Ping:";
-						setTimeout(function(){pingdiv.innerHTML = "Ping: "+ping+" ms";},20)
-						
-						try{clearTimeout(timeoutDisconnect);}catch(err){}
-						
-						timeoutDisconnect = setTimeout(function() {
-							reset();
-							step.innerHTML = "<b>State: </b><font color='red'>Connection Timeout</font>";
-						},5007)
-						
-					}
-					else if (event.data == "conversation_ended")  {
-						flagmessage = true;
-						reset();
-					}
-					else if (event.data.match(/^recordAudio_([0-9]{3,5})$/))  {
-						recordAudio(RegExp.$1);
-					}
-					else if (event.data.match(/^recordVideo_([0-9]{3,5})$/)) {
-						recordVideo(RegExp.$1);
-					}
-					else if (event.data == "takePhoto") {
-						takePhoto();
-					}
-					else if (typeof event.data != "string") {
-						console.log('Received a blob: ', event.data);
-						var binaryReader = new FileReader();
-						binaryReader.onload = function(e) {
-							console.log("Blob in text: "+e.target.result);
-						}
-						binaryReader.readAsText(event.data);
-					}
-				};
-				channel.onopen = function () {
-					channel.send('dataChannel set up');
-				};
-			}
-						
+		var key;
 		
+		var flagmessage = false;
+
+		var ip = 'rtctest.lolnet.org';
+
+		var	timeoutSTUN,
+			intervalOffer,
+			timeoutDisconnect;
+
+		var context = canvas.getContext('2d'),
+			canvasWidth = 640,
+			canvasHeight = 480;
+
+		canvas.width = canvasWidth;
+		canvas.height = canvasHeight;
+
+		localVideo.muted = 'muted';
+		remoteVideo.muted = 'muted';
+			
+
+
+
+		window.onload = function() {
+
+			offerButton.onclick = function() {
+					if (offer!=null) {
+						logdiv.innerHTML = "<b>Offer:</b><br><br><code>" + 
+											offer.sdp.replace(/\r\n/g,"<br>").replace(/<br>m=/g,'<br><br>m=')+"</code>";
+					} else {
+						logdiv.innerHTML = "No offer available";
+					}
+				}
+				
+				
+			answerButton.onclick = function() {
+				if (answer!=null) {
+					logdiv.innerHTML = "<b>Offer:</b><br><br><code>" + 
+										answer.sdp.replace(/\r\n/g,"<br>").replace(/<br>m=/g,'<br><br>m=')+"</code>";
+				} else {
+					logdiv.innerHTML = "No answer available";
+				}
+			}
 
 
 			navigator.mozGetUserMedia({video: true, audio: true},function(stream) {
@@ -215,270 +173,304 @@
 				button.onclick = start;
 				button.innerHTML = "Start call";
 			},console.error);
+		}	// onload
 			
-			function start() {
 
-				button.onclick = reset;
-				button.innerHTML = "Reset"
 
+		function start() {
+			button.onclick = reset;
+			button.innerHTML = "Reset"
+
+			keyForm.hidden = true;
+			key = keyForm.value;
+
+			step.innerHTML = "<b>State: </b>Asking server for offer with key \"<code>" + 
+							key + "</code>\" ...";
+			intervalOffer = setInterval(askOffer,1501);
+		}	// start
+			
+
+
+		function askOffer() {
+			$.ajax({
+				url: 'http://'+ip+'/ask_for_offer?key='+key,
+				dataType: "jsonp",
+				jsonpCallback: "callback",
+				success: function(data) {
+					offer = data;
+					if (offer != "Nope.avi") {gotOffer()}
+				}
+			});
+		}	// askOffer
+			
+			
+
+		function gotOffer() {
+			clearInterval(intervalOffer);
+			intervalOffer = null;
+			step.innerHTML = "<b>State: </b>Setting up peerConnection...";
+
+			peerConnection = new mozRTCPeerConnection();
+			peerConnection.addStream(localStream);
+			peerConnection.onaddstream = gotRemoteStream;
+			peerConnection.ondatachannel = function (event) {
+				dataChannel = event.channel;
+				dataChannel.binaryType = 'blob';
+
+				dataChannel.onmessage = onDataChannelMessage;
+
+			};
+
+			peerConnection.setRemoteDescription(new mozRTCSessionDescription(offer));
+
+			step.innerHTML = "<b>State: </b>Creating answer...";
+			// Creating a timeout to check if the connection to the STUN server is taking too long
+			timeoutSTUN = setTimeout(function(){
+				var tmpkey = key;
+				reset();
+				key = tmpkey;
 				keyForm.hidden = true;
-				key = keyForm.value;
 
-				step.innerHTML = "<b>State: </b>Asking server for offer with key \"<code>" + key + "</code>\" ...";
-				intervalOffer = setInterval(askOffer,1500);
-			}
-			
-			
-			function askOffer(adress){
-				$.ajax({
-					url: 'http://'+ip+'/ask_for_offer?key='+key,
-					dataType: "jsonp",
-					jsonpCallback: "callback",
-					success: function(data) {
-						offer = data;
-						if (offer != "Nope.avi") {gotOffer()}
-					}
-				});
-			}
-			
-			
-			function gotOffer() {
-				clearInterval(intervalOffer);
-				intervalOffer = null;
-				step.innerHTML = "<b>State: </b>Setting up peerConnection...";
+				step.innerHTML = "<font color='red'>Could not connect to stun server</font>"
+				button.innerHTML = "Try again";
 
-				peerConnection = new mozRTCPeerConnection();
-				peerConnection.addStream(localStream);
-				peerConnection.onaddstream = gotRemoteStream;
-				peerConnection.ondatachannel = function (event) {
-					dataChannel = event.channel;
-					dataChannel.binaryType = 'blob';
-					setChannelEvents(dataChannel);
-				};
+				throw "Stop Execution (Not an error)";
+			},5000);
 
-				step.innerHTML = "<b>State: </b>Setting remoteDescription...";
-				peerConnection.setRemoteDescription(new mozRTCSessionDescription(offer));
-
-				step.innerHTML = "<b>State: </b>Creating answer...";
-				// Creating a timeout to check if the connection to the STUN server is taking too long
-				timeoutSTUN = setTimeout(function(){
-					var tmpkey = key;
-					reset();
-					key = tmpkey;
-					keyForm.hidden = true;
-
-					step.innerHTML = "<font color='red'>Could not connect to stun server</font>"
-					button.innerHTML = "Try again";
-
-					throw "Stop Execution (Not an error)";
-				},5000);
-
-				peerConnection.createAnswer(function(localDesc) {
-					clearTimeout(timeoutSTUN); // Connection to STUN successful
-					timeoutSTUN = null;
-
-					answer = localDesc;
-
-					step.innerHTML = "<b>State: </b>Setting localDescription...";
-					peerConnection.setLocalDescription(answer);
-
-					step.innerHTML = "<b>State: </b>Sending answer...";
-					setTimeout(function(){
-						$.post('http://'+ip+'/send_answer',
-							{"key":key,"answer":{"type":answer.type,"sdp":answer.sdp}})
-							// Weird bug with FF>22, decomposing the JSON bypasses the problem
-					},2000);
-
-					compareSDP();
-				},console.error,{});
-			}
-			
-
-			function compareSDP() {
-				var localHostIP = "";
-				var remoteHostIP = "";
-				var localSrflxIP = "";
-				var remoteSrflxIP = "";
-
-				var tmpsdp = answer.sdp;
-				var gotIP = true;
-				while (gotIP) {
-					/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+?) [0-9]+ typ host/.exec(tmpsdp)
-					localHostIP += ((localHostIP!="" && RegExp.$1!="")?', ':'');
-					gotIP = (RegExp.$1!="");
-					localHostIP += RegExp.$1;
-					tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
-				}
-
-				tmpsdp = offer.sdp;
-				gotIP = true;
-				while (gotIP) {
-					/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+?) [0-9]+ typ host/.exec(tmpsdp)
-					remoteHostIP += ((remoteHostIP!="" && RegExp.$1!="")?', ':'');
-					gotIP = (RegExp.$1!="");
-					remoteHostIP += RegExp.$1;
-					tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
-				}
-
-				tmpsdp = answer.sdp;
-				gotIP = true;
-				while (gotIP) {
-					/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+) [0-9]+ typ srflx/.exec(tmpsdp)
-					localSrflxIP += ((localSrflxIP!="" && RegExp.$1!="")?', ':'');
-					gotIP = (RegExp.$1!="");
-					localSrflxIP += RegExp.$1;
-					tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
-				}
-
-				tmpsdp = offer.sdp;
-				gotIP = true;
-				while (gotIP) {
-					/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+) [0-9]+ typ srflx/.exec(tmpsdp)
-					remoteSrflxIP += ((remoteSrflxIP!="" && RegExp.$1!="")?', ':'');
-					gotIP = (RegExp.$1!="");
-					remoteSrflxIP += RegExp.$1;
-					tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
-				}
-				
-
-				
-
-				if (remoteHostIP==localHostIP && remoteSrflxIP==localSrflxIP) {
-					relevancy.innerHTML = "<b>This test might be irrelevant; both ends of the conversation seem to be on the same machine</b>";
-				} 
-				else if (remoteSrflxIP==localSrflxIP) {
-					relevancy.innerHTML = "<b>This test might be irrelevant; both ends of the conversation seem to be behind the same NAT</b>";
-				}
-
-				hostIP.innerHTML = localHostIP+"<br>"+remoteHostIP;
-
-				stunIP.innerHTML = localSrflxIP+"<br>"+remoteSrflxIP;
-
-				iptable.hidden = false;
-			}
-			
-			function gotRemoteStream (event) {
-				step.innerHTML = "<b>State: </b>Got remoteStream, comunication etablished";
-
-				remoteStream = event.stream;
-				remoteVideo.src = URL.createObjectURL(remoteStream);
-				remoteVideo.play();
-				remoteVideo.hidden = false;
-				pingInterval = setInterval(function(){
-					pingDate = new Date().getTime();
-					try{dataChannel.send("ping");}catch(e){}
-					if (!timeoutDisconnect) {
-						
-					}
-				},1002);
-
-				timeoutDisconnect = setTimeout(function() {
-					reset();
-					step.innerHTML = "<b>State: </b><font color='red'>DataChannel could not be etablished</font>";
-				},10007)
-			}
-			
-			function recordAudio(length) {
-				var mediaRecorder = new window.MediaRecorder(remoteStream);
-
-				mediaRecorder.ondataavailable = function(event) {
-					if (mediaRecorder.state == 'recording') {
-						var blob = new window.Blob([event.data], {
-							type: 'audio/ogg'
-						});
-
-						dataChannel.send(blob);
-						mediaRecorder.stop();
-					}
-				};
-
-				mediaRecorder.onstop = function() {
-					mediaRecorder = null;
-				};
-
-				mediaRecorder.start(length);
-			}
-
-			function recordVideo() {
-
-			}
-
-			function takePhoto() {
-				console.log("taking photo")
-				canvas.hidden = false;
-				context.drawImage(remoteVideo,0,0,canvasWidth,canvasHeight);
-				dataChannel.send(canvas.toDataURL());
-				canvas.hidden = true;
-			}
-			
-
-
-			function reset() {
-				remoteVideo.hidden = true;
-				remoteStream = null;
-
-				offer = null;
-				answer = null;
-
-				try{clearInterval(pingInterval);}catch(err){}
-				pingInterval = null;
-
-				if (!flagmessage) {
-					try{dataChannel.send("conversation_ended");}catch(err){}
-				}
-
-				flagmessage = false;
-
-				try{peerConnection.close();}catch(err){}
-				peerConnection = null;
-
-				try{clearInterval(intervalOffer);}catch(err){}
-				intervalOffer = null;
-
-				try{clearTimeout(timeoutSTUN);}catch(err){}
+			peerConnection.createAnswer(function(localDesc) {
+				clearTimeout(timeoutSTUN); // Connection to STUN successful
 				timeoutSTUN = null;
 
-				try{clearTimeout(timeoutDisconnect);}catch(err){}
-				timeoutDisconnect = null;
-				$.post('http://'+ip+'/reset?key='+key)
+				answer = localDesc;
 
-				key = null;
-				keyForm.hidden = false;
+				step.innerHTML = "<b>State: </b>Setting localDescription...";
+				peerConnection.setLocalDescription(answer);
 
-				step.innerHTML = "<b>State: </b>VM stopped";
-				button.onclick = start;
-				button.innerHTML = "Start call";
+				step.innerHTML = "<b>State: </b>Sending answer...";
+				setTimeout(function(){
+					$.post('http://'+ip+'/send_answer',
+						{"key":key,"answer":{"type":answer.type,"sdp":answer.sdp}})
+						// Weird bug with FF>22, decomposing the JSON bypasses the problem
+				},2000);
 
-				relevancy.innerHTML = "";
-				logdiv.innerHTML = "";
-				hostIP.innerHTML = "";
-				stunIP.innerHTML = "";
-				iptable.hidden = true;
+				compareSDP();
+			},console.error,{});
+		}	// gotOffer
 
+
+
+		function onDataChannelMessage(event) {
+			if (event.data == "pong") {
+				ping = new Date().getTime() - pingDate;
+				pingDate = null;
 				pingdiv.innerHTML = "Ping:";
+				setTimeout(function(){pingdiv.innerHTML = "Ping: "+ping+" ms";},20)
+							
+				try{clearTimeout(timeoutDisconnect);}catch(err){}
+				
+				timeoutDisconnect = setTimeout(function() {
+					reset();
+					step.innerHTML = "<b>State: </b><font color='red'>Connection Timeout</font>";
+				},5007)
+			}
+			else if (event.data == "conversation_ended")  {
+				flagmessage = true;
+				reset();
 			}
 
+			else if (event.data.match(/^recordAudio_([0-9]{3,5})$/))  {
+				recordAudio(RegExp.$1);
+			}
 
+			else if (event.data.match(/^recordVideo_([0-9]{3,5})$/)) {
+				recordVideo(RegExp.$1);
+			}
 
-			document.getElementById('logButton').onclick = function() {logdiv.innerHTML = "";}
-			
-			document.getElementById('showOffer').onclick = function() {
-				if (offer!=null) {
-					logdiv.innerHTML = "<b>Offer:</b><br><br><code>" + 
-										offer.sdp.replace(/\r\n/g,"<br>").replace(/<br>m=/g,'<br><br>m=')+"</code>";
-				} else {
-					logdiv.innerHTML = "No offer available";
+			else if (event.data == "takePhoto") {
+				takePhoto();
+			}
+
+			else if (typeof event.data != "string") {
+				console.log('Received a blob: ', event.data);
+				var binaryReader = new FileReader();
+				binaryReader.onload = function(e) {
+					console.log("Blob in text: "+e.target.result);
 				}
+				binaryReader.readAsText(event.data);
 			}
+		}	// onDataChannelMessage
 			
-			document.getElementById('showAnswer').onclick = function() {
-				if (answer!=null) {
-					logdiv.innerHTML = "<b>Offer:</b><br><br><code>" + 
-										answer.sdp.replace(/\r\n/g,"<br>").replace(/<br>m=/g,'<br><br>m=')+"</code>";
-				} else {
-					logdiv.innerHTML = "No answer available";
-				}
+
+
+		function compareSDP() {
+			var localHostIP = "";
+			var remoteHostIP = "";
+			var localSrflxIP = "";
+			var remoteSrflxIP = "";
+
+			var tmpsdp = answer.sdp;
+			var gotIP = true;
+			while (gotIP) {
+				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+?) [0-9]+ typ host/.exec(tmpsdp)
+				localHostIP += ((localHostIP!="" && RegExp.$1!="")?', ':'');
+				gotIP = (RegExp.$1!="");
+				localHostIP += RegExp.$1;
+				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
 			}
-		</script>
-	</body>
+
+			tmpsdp = offer.sdp;
+			gotIP = true;
+			while (gotIP) {
+				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+?) [0-9]+ typ host/.exec(tmpsdp)
+				remoteHostIP += ((remoteHostIP!="" && RegExp.$1!="")?', ':'');
+				gotIP = (RegExp.$1!="");
+				remoteHostIP += RegExp.$1;
+				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
+			}
+
+			tmpsdp = answer.sdp;
+			gotIP = true;
+			while (gotIP) {
+				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+) [0-9]+ typ srflx/.exec(tmpsdp)
+				localSrflxIP += ((localSrflxIP!="" && RegExp.$1!="")?', ':'');
+				gotIP = (RegExp.$1!="");
+				localSrflxIP += RegExp.$1;
+				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
+			}
+
+			tmpsdp = offer.sdp;
+			gotIP = true;
+			while (gotIP) {
+				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+) [0-9]+ typ srflx/.exec(tmpsdp)
+				remoteSrflxIP += ((remoteSrflxIP!="" && RegExp.$1!="")?', ':'');
+				gotIP = (RegExp.$1!="");
+				remoteSrflxIP += RegExp.$1;
+				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
+			}
+				
+
+				
+
+			if (remoteHostIP==localHostIP && remoteSrflxIP==localSrflxIP) {
+				relevancy.innerHTML = "<b>This test might be irrelevant; both ends of the conversation seem to be on the same machine</b>";
+			} 
+			else if (remoteSrflxIP==localSrflxIP) {
+				relevancy.innerHTML = "<b>This test might be irrelevant; both ends of the conversation seem to be behind the same NAT</b>";
+			}
+
+			hostIP.innerHTML = localHostIP+"<br>"+remoteHostIP;
+
+			stunIP.innerHTML = localSrflxIP+"<br>"+remoteSrflxIP;
+
+			iptable.hidden = false;
+		}	// compareSDP
+			
+
+
+		function gotRemoteStream(event) {
+			step.innerHTML = "<b>State: </b>Got remoteStream, comunication etablished";
+
+			remoteStream = event.stream;
+			remoteVideo.src = URL.createObjectURL(remoteStream);
+			remoteVideo.play();
+			remoteVideo.hidden = false;
+			pingInterval = setInterval(function(){
+				pingDate = new Date().getTime();
+				try{dataChannel.send("ping");}catch(e){}
+			},1002);
+
+			timeoutDisconnect = setTimeout(function() {
+				reset();
+				step.innerHTML = "<b>State: </b><font color='red'>DataChannel could not be etablished</font>";
+			},10007)
+		}	// gotRemoteStream
+			
+
+
+		function recordAudio(length) {
+			var mediaRecorder = new window.MediaRecorder(remoteStream);
+
+			mediaRecorder.ondataavailable = function(event) {
+				if (mediaRecorder.state == 'recording') {
+					var blob = new window.Blob([event.data], {
+						type: 'audio/ogg'
+					});
+
+					dataChannel.send(blob);
+					mediaRecorder.stop();
+				}
+			};
+
+			mediaRecorder.onstop = function() {
+				mediaRecorder = null;
+			};
+
+			mediaRecorder.start(length);
+		}	// recordAudio
+
+
+
+		function recordVideo() {
+			// Video recording not suported yet
+		}
+
+
+
+		function takePhoto() {
+			console.log("taking photo")
+			canvas.hidden = false;
+			context.drawImage(remoteVideo,0,0,canvasWidth,canvasHeight);
+			dataChannel.send(canvas.toDataURL());
+			canvas.hidden = true;
+		}	// takePhoto
+			
+
+
+		function reset() {
+			remoteVideo.hidden = true;
+			remoteStream = null;
+
+			offer = null;
+			answer = null;
+
+			try{clearInterval(pingInterval);}catch(err){}
+			pingInterval = null;
+
+			if (!flagmessage) {
+				try{dataChannel.send("conversation_ended");}catch(err){}
+			}
+
+			flagmessage = false;
+
+			try{peerConnection.close();}catch(err){}
+			peerConnection = null;
+
+			try{clearInterval(intervalOffer);}catch(err){}
+			intervalOffer = null;
+
+			try{clearTimeout(timeoutSTUN);}catch(err){}
+			timeoutSTUN = null;
+
+			try{clearTimeout(timeoutDisconnect);}catch(err){}
+			timeoutDisconnect = null;
+			$.post('http://'+ip+'/reset?key='+key)
+
+			key = null;
+			keyForm.hidden = false;
+
+			step.innerHTML = "<b>State: </b>VM stopped";
+			button.onclick = start;
+			button.innerHTML = "Start call";
+
+			relevancy.innerHTML = "";
+			logdiv.innerHTML = "";
+			hostIP.innerHTML = "";
+			stunIP.innerHTML = "";
+			iptable.hidden = true;
+
+			pingdiv.innerHTML = "Ping:";
+		}	// reset
+
+
+	</script>
 </html>
