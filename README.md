@@ -1,4 +1,4 @@
 Mozilla
 =======
 
-The work i do durring my intersnhip 
+The work I do during my internhip at Mozilla.
