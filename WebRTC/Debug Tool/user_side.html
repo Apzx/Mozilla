@@ -52,6 +52,9 @@
 				position: fixed;
 				left: 400px;
 				line-height: 12px;
+				overflow-y: auto;
+				height: 95%;
+				width: 200px;
 			}
 		</style>
 	</head>
@@ -196,6 +199,7 @@
 				reader.onload = function(e) {
 					var audioElement = document.createElement('audio');
 					audioElement.controls = "controls";
+					audioElement.style = "width: 160px;";
 					logdiv.innerHTML += "<br><br>";
 					logdiv.appendChild(audioElement);
 					audioElement.src = e.target.result;

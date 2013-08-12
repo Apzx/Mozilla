@@ -44,6 +44,9 @@
 				position: fixed;
 				left: 400px;
 				line-height: 12px;
+				overflow-y: auto;
+				width: 50%;
+				height: 95%;
 			}
 
 			#pingdiv {
@@ -171,7 +174,7 @@
 			
 				button.hidden = false;
 				button.onclick = start;
-				button.innerHTML = "Start call";
+				button.innerHTML = "Initiate call";
 			},console.error);
 		}	// onload
 			
@@ -410,7 +413,7 @@
 
 
 
-		function recordVideo() {
+		function recordVideo(length) {
 			// Video recording not suported yet
 		}
 
@@ -458,9 +461,9 @@
 			key = null;
 			keyForm.hidden = false;
 
-			step.innerHTML = "<b>State: </b>VM stopped";
+			step.innerHTML = "<b>State: </b>Call ended";
 			button.onclick = start;
-			button.innerHTML = "Start call";
+			button.innerHTML = "Initiate call";
 
 			relevancy.innerHTML = "";
 			logdiv.innerHTML = "";
