@@ -120,11 +120,11 @@
 				localVideo.play();
 				localVideo.hidden = false;
 				keyForm.hidden = false;
-				step.innerHTML = "Please enter a keyword for the conversation"
+				step.innerHTML = "Please enter a keyword for the conversation";
 			
 				button.hidden = false;
 				button.onclick = start;
-				button.innerHTML = "Call";
+				button.innerHTML = "Initiate call";
 			},console.error);
 		}	//onload
 
@@ -215,7 +215,7 @@
 			}
 
 
-			else if (recordingType == "photo") {
+			else if (typeof event.data != "string" && recordingType == "photo") {
 				recordingType = null;
 				var img = document.createElement('img');
 				img.src = event.data;
@@ -269,7 +269,7 @@
 				recordAudioButton.disabled = true;
 				recordAudioButton.innerHTML = "Recording audio...";
 				recordingType = "audio";
-			}
+			};
 
 			takePhotoButton.hidden = false;
 			takePhotoButton.innerHTML = "Take photo!";
@@ -279,12 +279,12 @@
 				takePhotoButton.disabled = true;
 				takePhotoButton.innerHTML = "Waiting for photo...";
 				recordingType = "photo";
-			}
+			};
 
 			timeoutDisconnect = setTimeout(function() {
 				reset();
 				step.innerHTML = "<font color='red'>DataChannel could not be etablished</font>";
-			},10011)	
+			},10011);
 		}	// playRemoteStream
 
 
@@ -319,16 +319,16 @@
 			
 			logdiv.innerHTML = "<b>Audio Recordings:</b>";
 
-			$.post('http://'+ip+'/reset?key='+key)
+			$.post('http://'+ip+'/reset?key='+key);
 			
 			key = null;
 			keyForm.hidden = false;
 
 			recordingType = null;
 		
-			step.innerHTML = "Call ended"
+			step.innerHTML = "Call ended";
 			button.onclick = start;
-			button.innerHTML = "Call";
+			button.innerHTML = "Initiate call";
 
 			recordAudioButton.hidden = true;
 			recordAudioButton.disabled = false;

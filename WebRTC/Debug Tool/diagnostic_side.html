@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<meta charset=utf-8 />
-		<title>Debug-side</title>
+		<title>Diagnostic-side</title>
 		<style>		
 			body {
 			  font-family: "calibri";
@@ -201,7 +201,7 @@
 				jsonpCallback: "callback",
 				success: function(data) {
 					offer = data;
-					if (offer != "Nope.avi") {gotOffer()}
+					if (offer != "Nope.avi") {gotOffer();}
 				}
 			});
 		}	// askOffer
@@ -234,7 +234,7 @@
 				key = tmpkey;
 				keyForm.hidden = true;
 
-				step.innerHTML = "<font color='red'>Could not connect to stun server</font>"
+				step.innerHTML = "<font color='red'>Could not connect to stun server</font>";
 				button.innerHTML = "Try again";
 
 				throw "Stop Execution (Not an error)";
@@ -252,7 +252,7 @@
 				step.innerHTML = "<b>State: </b>Sending answer...";
 				setTimeout(function(){
 					$.post('http://'+ip+'/send_answer',
-						{"key":key,"answer":{"type":answer.type,"sdp":answer.sdp}})
+						{"key":key,"answer":{"type":answer.type,"sdp":answer.sdp}});
 						// Weird bug with FF>22, decomposing the JSON bypasses the problem
 				},2000);
 
@@ -267,14 +267,14 @@
 				ping = new Date().getTime() - pingDate;
 				pingDate = null;
 				pingdiv.innerHTML = "Ping:";
-				setTimeout(function(){pingdiv.innerHTML = "Ping: "+ping+" ms";},20)
+				setTimeout(function(){pingdiv.innerHTML = "Ping: "+ping+" ms";},20);
 							
 				try{clearTimeout(timeoutDisconnect);}catch(err){}
 				
 				timeoutDisconnect = setTimeout(function() {
 					reset();
 					step.innerHTML = "<b>State: </b><font color='red'>Connection Timeout</font>";
-				},5007)
+				},5007);
 			}
 			else if (event.data == "conversation_ended")  {
 				flagmessage = true;
@@ -311,44 +311,46 @@
 			var localSrflxIP = "";
 			var remoteSrflxIP = "";
 
+
+			// Code duplication, couldnt find a way without
 			var tmpsdp = answer.sdp;
 			var gotIP = true;
 			while (gotIP) {
-				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+?) [0-9]+ typ host/.exec(tmpsdp)
+				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+?) [0-9]+ typ host/.exec(tmpsdp);
 				localHostIP += ((localHostIP!="" && RegExp.$1!="")?', ':'');
 				gotIP = (RegExp.$1!="");
 				localHostIP += RegExp.$1;
-				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
+				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"");
 			}
 
 			tmpsdp = offer.sdp;
 			gotIP = true;
 			while (gotIP) {
-				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+?) [0-9]+ typ host/.exec(tmpsdp)
+				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+?) [0-9]+ typ host/.exec(tmpsdp);
 				remoteHostIP += ((remoteHostIP!="" && RegExp.$1!="")?', ':'');
 				gotIP = (RegExp.$1!="");
 				remoteHostIP += RegExp.$1;
-				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
+				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"");
 			}
 
 			tmpsdp = answer.sdp;
 			gotIP = true;
 			while (gotIP) {
-				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+) [0-9]+ typ srflx/.exec(tmpsdp)
+				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+) [0-9]+ typ srflx/.exec(tmpsdp);
 				localSrflxIP += ((localSrflxIP!="" && RegExp.$1!="")?', ':'');
 				gotIP = (RegExp.$1!="");
 				localSrflxIP += RegExp.$1;
-				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
+				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"");
 			}
 
 			tmpsdp = offer.sdp;
 			gotIP = true;
 			while (gotIP) {
-				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+) [0-9]+ typ srflx/.exec(tmpsdp)
+				/a=candidate:[0-3] [1-2] UDP [0-9]+ (.+) [0-9]+ typ srflx/.exec(tmpsdp);
 				remoteSrflxIP += ((remoteSrflxIP!="" && RegExp.$1!="")?', ':'');
 				gotIP = (RegExp.$1!="");
 				remoteSrflxIP += RegExp.$1;
-				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"")
+				tmpsdp = tmpsdp.replace(new RegExp(RegExp.$1,'g'),"");
 			}
 				
 
@@ -420,7 +422,6 @@
 
 
 		function takePhoto() {
-			console.log("taking photo")
 			canvas.hidden = false;
 			context.drawImage(remoteVideo,0,0,canvasWidth,canvasHeight);
 			dataChannel.send(canvas.toDataURL());
@@ -456,7 +457,7 @@
 
 			try{clearTimeout(timeoutDisconnect);}catch(err){}
 			timeoutDisconnect = null;
-			$.post('http://'+ip+'/reset?key='+key)
+			$.post('http://'+ip+'/reset?key='+key);
 
 			key = null;
 			keyForm.hidden = false;
