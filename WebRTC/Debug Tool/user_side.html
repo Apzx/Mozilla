@@ -5,7 +5,7 @@
 		<title>User-side</title>
 		<style>		
 			body {
-			  font-family: "calibri";
+				font-family: calibri, arial;
 			}
 
 			#localVideo {
@@ -51,6 +51,7 @@
 			#logdiv {
 				position: fixed;
 				left: 400px;
+				top: 20px;
 				line-height: 12px;
 				overflow-y: auto;
 				height: 95%;
@@ -193,29 +194,28 @@
 			}
 
 
-			else if (typeof event.data != "string" && recordingType=='audio') {
+			else if (recordingType == 'audio') {
 				recordingType = null;
-				var reader = new FileReader();
-				reader.onload = function(e) {
-					var audioElement = document.createElement('audio');
-					audioElement.controls = "controls";
-					audioElement.style = "width: 160px;";
-					logdiv.innerHTML += "<br><br>";
-					logdiv.appendChild(audioElement);
-					audioElement.src = e.target.result;
-					audioElement.play();
-					recordAudioButton.innerHTML = "Playing audio...";
-					audioElement.addEventListener('ended', function () {
-	   					recordAudioButton.innerHTML = "Record audio!";
-						recordAudioButton.disabled = false;
-						takePhotoButton.disabled = false;
-	   				}, false);
-				};
-				reader.readAsDataURL(event.data);
+				var audioElement = document.createElement('audio');
+				audioElement.controls = "controls";
+				audioElement.style = "width: 160px;";
+
+				logdiv.innerHTML += "<br><br>";
+				logdiv.appendChild(audioElement);
+
+				audioElement.src = event.data;
+				audioElement.play();
+				
+				recordAudioButton.innerHTML = "Playing audio...";
+				audioElement.addEventListener('ended', function () {
+	   				recordAudioButton.innerHTML = "Record audio!";
+					recordAudioButton.disabled = false;
+					takePhotoButton.disabled = false;
+	   			}, false);
 			}
 
 
-			else if (typeof event.data != "string" && recordingType == "photo") {
+			else if (recordingType == "photo") {
 				recordingType = null;
 				var img = document.createElement('img');
 				img.src = event.data;
@@ -226,6 +226,10 @@
 				takePhotoButton.disabled = false;
 				recordAudioButton.disabled = false;
 				takePhotoButton.innerHTML = 'Take photo!';
+			}
+
+			else {
+				console.log("Unexpected message: ", event.data);
 			}
 		}	// onDataChannelMessage
 	

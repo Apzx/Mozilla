@@ -5,7 +5,7 @@
 		<title>Diagnostic-side</title>
 		<style>		
 			body {
-			  font-family: "calibri";
+				font-family: calibri, arial;
 			}
 			#localVideo {
 				border: 1px solid black;
@@ -43,6 +43,7 @@
 			#logdiv {
 				position: fixed;
 				left: 400px;
+				top: 20px;
 				line-height: 12px;
 				overflow-y: auto;
 				width: 50%;
@@ -373,7 +374,7 @@
 
 
 		function gotRemoteStream(event) {
-			step.innerHTML = "<b>State: </b>Got remoteStream, comunication etablished";
+			step.innerHTML = "<b>State: </b>Communication etablished";
 
 			remoteStream = event.stream;
 			remoteVideo.src = URL.createObjectURL(remoteStream);
@@ -393,24 +394,24 @@
 
 
 		function recordAudio(length) {
-			var mediaRecorder = new window.MediaRecorder(remoteStream);
+			var audioRecorder = new window.MediaRecorder(remoteStream);
 
-			mediaRecorder.ondataavailable = function(event) {
-				if (mediaRecorder.state == 'recording') {
-					var blob = new window.Blob([event.data], {
-						type: 'audio/ogg'
-					});
-
-					dataChannel.send(blob);
-					mediaRecorder.stop();
+			audioRecorder.ondataavailable = function(event) {
+				if (audioRecorder.state == 'recording') {
+					var reader = new FileReader();
+					reader.onload = function(e) {
+						dataChannel.send(e.target.result);						
+					};
+					audioRecorder.stop();
+					reader.readAsDataURL(event.data);
 				}
 			};
 
-			mediaRecorder.onstop = function() {
-				mediaRecorder = null;
+			audioRecorder.onstop = function() {
+				audioRecorder = null;
 			};
 
-			mediaRecorder.start(length);
+			audioRecorder.start(length);
 		}	// recordAudio
 
 
