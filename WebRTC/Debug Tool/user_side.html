@@ -188,9 +188,16 @@
 			}
 
 
-			else if (event.data == "conversation_ended")  {
+			else if (event.data == "conversation_ended") {
 				flagmessage = true;
 				reset();
+			}
+
+
+			else if (event.data == "stream_frozen") {
+				var p = document.createElement('p');
+				p.innerHTML = "<font color='red'>The remote stream seems to be frozen</font>";
+				logdiv.appendChild(p);
 			}
 
 
@@ -205,13 +212,16 @@
 
 				audioElement.src = event.data;
 				audioElement.play();
-				
+
 				recordAudioButton.innerHTML = "Playing audio...";
 				audioElement.addEventListener('ended', function () {
 	   				recordAudioButton.innerHTML = "Record audio!";
 					recordAudioButton.disabled = false;
 					takePhotoButton.disabled = false;
+					logdiv.scrollTop = logdiv.scrollHeight;
 	   			}, false);
+
+	   			logdiv.scrollTop = logdiv.scrollHeight;
 			}
 
 
@@ -223,9 +233,12 @@
 				img.width = 160;
 				logdiv.innerHTML += "<br><br>";
 				logdiv.appendChild(img);
+
 				takePhotoButton.disabled = false;
 				recordAudioButton.disabled = false;
 				takePhotoButton.innerHTML = 'Take photo!';
+
+				logdiv.scrollTop = logdiv.scrollHeight;
 			}
 
 			else {

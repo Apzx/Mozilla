@@ -70,7 +70,7 @@
 
 	<body bgcolor="#EEEEFF">
 		<div id="container">
-			<h2>User-side of my WebRTC tool</h2>
+			<h2>Diagnostic-side of my WebRTC tool</h2>
 		
 			<p id="step"><b>State: </b>Waiting for medias</p>
 			<input type="text" id="keyForm" value="" hidden=true placeholder="Room key">
@@ -202,7 +202,7 @@
 				jsonpCallback: "callback",
 				success: function(data) {
 					offer = data;
-					if (offer != "Nope.avi") {gotOffer();}
+					if (offer != "Nope.avi") gotOffer();
 				}
 			});
 		}	// askOffer
@@ -424,9 +424,17 @@
 
 		function takePhoto() {
 			canvas.hidden = false;
+
 			context.drawImage(remoteVideo,0,0,canvasWidth,canvasHeight);
-			dataChannel.send(canvas.toDataURL());
+			var photo1 = canvas.toDataURL();
+			dataChannel.send(photo1);
+
+			context.drawImage(remoteVideo,0,0,canvasWidth,canvasHeight);
+			var photo2 = canvas.toDataURL();
+
 			canvas.hidden = true;
+
+			if (photo1 == photo2) dataChannel.send("stream_frozen");
 		}	// takePhoto
 			
 
