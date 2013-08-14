@@ -72,8 +72,9 @@
 			<input type="text" name="keyForm" id="keyForm" hidden=true placeholder="Desired keyword">
 			<button id="button" hidden=true></button>
 			<br><br><br>
-			<button id="recordAudioButton" hidden=true></button>
-			<button id="takePhotoButton" hidden=true></button><br>
+			<button class="recording" id="recordAudioButton" hidden=true></button>
+			<button class="recording" id="takePhotoButton" hidden=true></button>
+			<button class="recording" id="recordVideoButton" hidden=true></button><br>
 			<button onclick='logdiv.innerHTML = "<b>Recordings:</b>"'>Clear recordings</button>
 
 			
@@ -108,6 +109,8 @@
 			timeoutReplay,
 			audioRecordLength = 4000,
 			timeoutDisconnect;
+
+		var recordingResult = [];
 		
 		localVideo.muted = 'muted';
 		remoteVideo.muted = 'muted';
@@ -196,18 +199,19 @@
 
 			else if (event.data == "stream_frozen") {
 				var p = document.createElement('p');
-				p.innerHTML = "<font color='red'>The remote stream seems to be frozen</font>";
+				p.innerHTML = "<font color='red' size=8>The remote stream seems to be frozen</font>";
 				logdiv.appendChild(p);
 			}
 
 
 			else if (recordingType == 'audio') {
 				recordingType = null;
+				logdiv.innerHTML += "<br><br>";
+				
 				var audioElement = document.createElement('audio');
 				audioElement.controls = "controls";
 				audioElement.style = "width: 160px;";
 
-				logdiv.innerHTML += "<br><br>";
 				logdiv.appendChild(audioElement);
 
 				audioElement.src = event.data;
@@ -215,9 +219,12 @@
 
 				recordAudioButton.innerHTML = "Playing audio...";
 				audioElement.addEventListener('ended', function () {
-	   				recordAudioButton.innerHTML = "Record audio!";
-					recordAudioButton.disabled = false;
+
 					takePhotoButton.disabled = false;
+					recordAudioButton.disabled = false;
+					recordVideoButton.disabled = false;
+	   				recordAudioButton.innerHTML = "Record audio!";
+
 					logdiv.scrollTop = logdiv.scrollHeight;
 	   			}, false);
 
@@ -225,17 +232,71 @@
 			}
 
 
+			else if (event.data == "recording_ended") {
+				recordingType = null;
+				logdiv.innerHTML += "<br><br>";
+
+				var img = document.createElement('img');
+				img.width = 160;
+				img.height = 120;
+				img.style = "border: 1px solid black;"
+				var sound = document.createElement('audio');
+				var randomnumber = Math.floor(Math.random()*10000000);
+				sound.id = randomnumber;
+				img.audiosrc = randomnumber;
+				sound.src = recordingResult.shift();
+				sound.preload = 'auto';
+				img.videoArray = recordingResult;
+				img.src = img.videoArray[0];
+				img.onclick = function(){
+					document.getElementById(img.audiosrc).play();
+					var i = 0;
+					intervalFrame = setInterval(function(){
+						img.src = img.videoArray[i];
+						i++;
+						if (i>=img.videoArray.length) {
+							clearInterval(intervalFrame);
+							img.src = img.videoArray[0];
+						}
+					},100);
+				};
+
+				logdiv.appendChild(img);
+				logdiv.appendChild(sound);
+				// logdiv.innerHTML += '<br><font size="0.5">Click on the picture to play the recoding</font>';
+				// Why in hell does this line block the onclick event!?
+
+				recordingResult = [];
+
+				takePhotoButton.disabled = false;
+				recordAudioButton.disabled = false;
+				recordVideoButton.disabled = false;
+				recordVideoButton.innerHTML = "Record video!";
+
+				logdiv.scrollTop = logdiv.scrollHeight;
+			}
+
+
+			else if (recordingType == 'video') {
+				recordingResult.push(event.data);
+			}
+
+
 			else if (recordingType == "photo") {
 				recordingType = null;
+				logdiv.innerHTML += "<br><br>";
+
 				var img = document.createElement('img');
 				img.src = event.data;
 				img.height = 120;
 				img.width = 160;
-				logdiv.innerHTML += "<br><br>";
+				img.style = "border: 1px solid black;"
+
 				logdiv.appendChild(img);
 
 				takePhotoButton.disabled = false;
 				recordAudioButton.disabled = false;
+				recordVideoButton.disabled = false;
 				takePhotoButton.innerHTML = 'Take photo!';
 
 				logdiv.scrollTop = logdiv.scrollHeight;
@@ -282,18 +343,38 @@
 			recordAudioButton.innerHTML = "Record audio!";
 			recordAudioButton.onclick = function(){
 				dataChannel.send('recordAudio_'+audioRecordLength);
+
 				takePhotoButton.disabled = true;
 				recordAudioButton.disabled = true;
+				recordVideoButton.disabled = true;
+
 				recordAudioButton.innerHTML = "Recording audio...";
 				recordingType = "audio";
 			};
+
+			recordVideoButton.hidden = false;
+			recordVideoButton.innerHTML = "Record video!";
+			recordVideoButton.onclick = function() {
+				dataChannel.send('recordVideo_'+audioRecordLength);
+
+				takePhotoButton.disabled = true;
+				recordAudioButton.disabled = true;
+				recordVideoButton.disabled = true;
+
+				recordVideoButton.innerHTML = "Recording video...";
+				recordingType = "video";
+			};
+
 
 			takePhotoButton.hidden = false;
 			takePhotoButton.innerHTML = "Take photo!";
 			takePhotoButton.onclick = function(){
 				dataChannel.send('takePhoto');
-				recordAudioButton.disabled = true;
+
 				takePhotoButton.disabled = true;
+				recordAudioButton.disabled = true;
+				recordVideoButton.disabled = true;
+
 				takePhotoButton.innerHTML = "Waiting for photo...";
 				recordingType = "photo";
 			};
@@ -347,16 +428,25 @@
 			button.onclick = start;
 			button.innerHTML = "Initiate call";
 
+			takePhotoButton.hidden = true;
+			takePhotoButton.disabled = false;
+			takePhotoButton.innerHTML = "Take photo!";
+			takePhotoButton.onclick = function(){};
+
 			recordAudioButton.hidden = true;
 			recordAudioButton.disabled = false;
 			recordAudioButton.innerHTML = "Record audio!";
 			recordAudioButton.onclick = function(){};
 
-			takePhotoButton.hidden = true;
-			takePhotoButton.disabled = false;
-			takePhotoButton.innerHTML = "Record video!";
-			takePhotoButton.onclick = function(){};
-			videoRecordResult = [];
+			recordVideoButton.hidden = true;
+			recordVideoButton.disabled = false;
+			recordVideoButton.innerHTML = "Record video!";
+			recordVideoButton.onclick = function(){};
+
+			recordingResult = [];
+
+			try{clearInterval(intervalFrame);}catch(err){}
+			intervalFrame = null;
 		}	// reset
 				
 			

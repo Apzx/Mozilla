@@ -66,7 +66,8 @@
 
 	<video id="localVideo" hidden=true></video>
 	<video id="remoteVideo" hidden=true></video>
-	<canvas id="canvas" hidden></canvas>
+	<canvas id="canvasPhoto" hidden></canvas>
+	<canvas id="canvasVideo" hidden></canvas>
 
 	<body bgcolor="#EEEEFF">
 		<div id="container">
@@ -130,12 +131,15 @@
 			intervalOffer,
 			timeoutDisconnect;
 
-		var context = canvas.getContext('2d'),
-			canvasWidth = 640,
-			canvasHeight = 480;
+		var contextPhoto = canvasPhoto.getContext('2d');
 
-		canvas.width = canvasWidth;
-		canvas.height = canvasHeight;
+		canvasPhoto.width = 640;
+		canvasPhoto.height = 480;
+
+		var contextVideo = canvasVideo.getContext('2d');
+
+		canvasVideo.width = 160;
+		canvasVideo.height = 120;
 
 		localVideo.muted = 'muted';
 		remoteVideo.muted = 'muted';
@@ -400,7 +404,7 @@
 				if (audioRecorder.state == 'recording') {
 					var reader = new FileReader();
 					reader.onload = function(e) {
-						dataChannel.send(e.target.result);						
+						dataChannel.send(e.target.result);
 					};
 					audioRecorder.stop();
 					reader.readAsDataURL(event.data);
@@ -417,24 +421,69 @@
 
 
 		function recordVideo(length) {
-			// Video recording not suported yet
+			var audioRecorder = new window.MediaRecorder(remoteStream);
+			var videoResult = [], audioResult;
+
+
+			audioRecorder.ondataavailable = function(event) {
+				if (audioRecorder.state == 'recording') {
+					var reader = new FileReader();
+					reader.onload = function(e) {
+						audioResult = e.target.result;
+						dataChannel.send(audioResult);
+						console.log(videoResult)
+						for (i in videoResult) {
+							dataChannel.send(videoResult[i]);
+						};
+						dataChannel.send("recording_ended");
+					};
+					reader.readAsDataURL(event.data);
+					audioRecorder.stop();
+				}
+			};
+
+
+			intervalVideoRecord = setInterval(function(){
+				contextVideo.drawImage(remoteVideo, 0, 0, canvasVideo.width, canvasVideo.height);
+				videoResult.push(canvasVideo.toDataURL());
+			},100);
+
+			audioRecorder.start(4000);
+
+			timeoutVideoRecord = setTimeout(function(){
+				clearInterval(intervalVideoRecord);
+			},4000);
 		}
 
 
 
 		function takePhoto() {
-			canvas.hidden = false;
+			contextPhoto.drawImage(remoteVideo, 0, 0, canvasPhoto.width, canvasPhoto.height);
+			var photo = canvasPhoto.toDataURL();
+			dataChannel.send(photo);
 
-			context.drawImage(remoteVideo,0,0,canvasWidth,canvasHeight);
-			var photo1 = canvas.toDataURL();
-			dataChannel.send(photo1);
+			canvasPhoto.width /= 16;
+			canvasPhoto.height /= 16;
 
-			context.drawImage(remoteVideo,0,0,canvasWidth,canvasHeight);
-			var photo2 = canvas.toDataURL();
+			contextPhoto.drawImage(remoteVideo, 0, 0, canvasPhoto.width, canvasPhoto.height);
+			var photo1 = canvasPhoto.toDataURL();
 
-			canvas.hidden = true;
+			contextPhoto.drawImage(remoteVideo, 0, 0, canvasPhoto.width, canvasPhoto.height);
+			var photo2 = canvasPhoto.toDataURL();
 
-			if (photo1 == photo2) dataChannel.send("stream_frozen");
+			canvasPhoto.width *= 16;
+			canvasPhoto.height *= 16;
+
+
+			if (photo1 == photo2) {
+				contextPhoto.drawImage(remoteVideo, 0, 0, canvasPhoto.width, canvasPhoto.height);
+				photo1 = canvasPhoto.toDataURL();
+
+				contextPhoto.drawImage(remoteVideo, 0, 0, canvasPhoto.width, canvasPhoto.height);
+				photo2 = canvasPhoto.toDataURL();
+
+				if (photo1 == photo2) dataChannel.send("stream_frozen");
+			}
 		}	// takePhoto
 			
 
@@ -466,6 +515,7 @@
 
 			try{clearTimeout(timeoutDisconnect);}catch(err){}
 			timeoutDisconnect = null;
+
 			$.post('http://'+ip+'/reset?key='+key);
 
 			key = null;
@@ -482,6 +532,15 @@
 			iptable.hidden = true;
 
 			pingdiv.innerHTML = "Ping:";
+
+			canvasPhoto.width = 640;
+			canvasPhoto.height = 480;
+
+			try{clearInterval(intervalVideoRecord);}catch(err){}
+			intervalVideoRecord = null;
+
+			try{clearTimeout(timeoutVideoRecord);}catch(err){}
+			timeoutVideoRecord = null;
 		}	// reset
 
 
