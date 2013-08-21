@@ -11,27 +11,8 @@
 	<script type="text/javascript">
 
 		var localStream,
-			glob = 
-			{
-				"placeholder":
-				{
-					remoteStream: null,
-					remoteVideo: null,
-					peerConnection: null,
-					dataChannel: null,
-
-					pingInterval: null,
-					timeoutSTUN: null,
-					intervalOffer: null,
-					timeoutDisconnect: null,
-
-					canvasPhoto: null,
-					contextPhoto: null,
-					canvasVideo: null,
-					contextVideo: null,
-				}
-
-			}
+			timeoutOffer,
+			glob = {};
 		
 		var flagmessage = false;
 
@@ -73,7 +54,8 @@
 			
 
 		function gotOffer(data) {
-			var key = data["key"]
+			var key = data["key"];
+
 			glob[key] = {
 					remoteVideo: null,
 					remoteStream: null,
@@ -82,7 +64,6 @@
 
 					pingInterval: null,
 					timeoutSTUN: null,
-					intervalOffer: null,
 					timeoutDisconnect: null,
 
 					canvasPhoto: null,
@@ -90,27 +71,36 @@
 					canvasVideo: null,
 					contextVideo: null,
 
-					
+					notif: null,
 				};
+
 			glob[key].remoteVideo = document.createElement('video');
 			glob[key].remoteVideo.hidden = true;
 			glob[key].remoteVideo.muted = true;
 			glob[key].remoteVideo.id = "video_"+key;
+			body.appendChild(glob[key].remoteVideo);
+
+			glob[key].notif = document.createElement('div');
+			glob[key].notif.id = "notif_"+key;
+			glob[key].notif.innerHTML = "\""+key+"\" connected";
+			body.appendChild(glob[key].notif);
 
 			glob[key].canvasPhoto = document.createElement('canvas');
 			glob[key].canvasPhoto.id = "canvasPhoto_"+key;
-			glob[key].contextPhoto = glob[key].canvasPhoto.getContext('2d');
-
 			glob[key].canvasPhoto.width = 640;
 			glob[key].canvasPhoto.height = 480;
+
+			glob[key].contextPhoto = glob[key].canvasPhoto.getContext('2d');
 
 
 			glob[key].canvasVideo = document.createElement('canvas');
 			glob[key].canvasVideo.id = "canvasVideo_"+key;
-			glob[key].contextVideo = glob[key].canvasVideo.getContext('2d');
-
 			glob[key].canvasVideo.width = 160;
 			glob[key].canvasVideo.height = 120;
+
+			glob[key].contextVideo = glob[key].canvasVideo.getContext('2d');
+
+
 
 			glob[key].peerConnection = new mozRTCPeerConnection();
 			glob[key].peerConnection.unofficialID = key;
@@ -119,9 +109,7 @@
 			glob[key].peerConnection.ondatachannel = function (event) {
 				glob[key].dataChannel = event.channel;
 				glob[key].dataChannel.binaryType = 'blob';
-
 				glob[key].dataChannel.onmessage = onDataChannelMessage;
-
 			};
 
 			glob[key].peerConnection.setRemoteDescription(
@@ -153,10 +141,9 @@
 
 			if (event.data.match(/^pong_(.+)$/)) {
 				try{clearTimeout(glob[RegExp.$1].timeoutDisconnect);}catch(err){}
-				
-				glob[RegExp.$1].timeoutDisconnect = setTimeout(function() {
-					console.log("reset on key: "+RegExp.$1)
-					reset(RegExp.$1);
+				var tmp = RegExp.$1;
+				glob[tmp].timeoutDisconnect = setTimeout(function() {
+					reset(tmp);
 				},5007);
 			}
 			else if (event.data.match(/^conversationEnded_(.+)$/))  {
@@ -196,7 +183,6 @@
 			glob[key].remoteStream = event.stream;
 			glob[key].remoteVideo.src = URL.createObjectURL(glob[key].remoteStream);
 			glob[key].remoteVideo.play();
-			body.appendChild(glob[key].remoteVideo);
 			glob[key].pingInterval = setInterval(function(){
 				try{glob[key].dataChannel.send("ping");}catch(e){}
 			},1002);
@@ -246,7 +232,7 @@
 					reader.readAsDataURL(event.data);
 					audioRecorder.stop();
 				}
-			};
+			};	// audioRecorder.ondataavailable
 
 
 			glob[key].intervalVideoRecord = setInterval(function(){
@@ -259,7 +245,7 @@
 			glob[key].timeoutVideoRecord = setTimeout(function(){
 				clearInterval(glob[key].intervalVideoRecord);
 			},4000);
-		}
+		}	// revordVideo
 
 
 
@@ -268,6 +254,7 @@
 			var photo = glob[key].canvasPhoto.toDataURL();
 			glob[key].dataChannel.send(photo);
 
+			// verifie si le stream est bloqué, TRES demandeur de ressources
 			/*glob[key].canvasPhoto.width /= 16;
 			glob[key].canvasPhoto.height /= 16;
 
@@ -303,6 +290,7 @@
 			flagmessage = false;
 
 			deleteElement("video_"+key);
+			deleteElement("notif_"+key);
 
 			try{clearInterval(glob[key].pingInterval);}catch(err){}
 			glob[key].pingInterval = null;
@@ -329,8 +317,8 @@
 
 		function deleteElement(id) {
 			var element = document.getElementById(id);
-			console.log("id: "+id+" element: ",element)
-			element.parentNode.removeChild(element);
-		}
+			try{element.parentNode.removeChild(element);}
+			catch(err){console.log("Tried to delete element "+id+", did not exist")}
+		}	// deleteElement
 	</script>
 </html>

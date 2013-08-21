@@ -19,16 +19,6 @@
 				transform: rotateY(180deg);
 			}
 
-
-			#remoteVideo {
-				border: 1px solid black;
-				position: fixed;
-				max-width: 50%;
-				height: 30%;
-				bottom: 30%;
-				right: 0px;
-				z-index: 0;
-			}
 			
 			#container {
 				position: fixed;
@@ -61,7 +51,6 @@
 	</head>
 	
 	<video id="localVideo" hidden=true></video>
-	<video id="remoteVideo" hidden=true></video>
 	
 	<body bgcolor="#EEEEFF">
 		<div id="container">
@@ -69,13 +58,12 @@
 		
 			<p id="step">Waiting for the user medias (Audio + video)</p>
 			
-			<input type="text" name="keyForm" id="keyForm" hidden=true placeholder="Desired keyword">
 			<button id="button" hidden=true></button>
 			<br><br><br>
-			<button class="recording" id="recordAudioButton" hidden=true></button>
-			<button class="recording" id="takePhotoButton" hidden=true></button>
-			<button class="recording" id="recordVideoButton" hidden=true></button><br>
-			<button onclick='logdiv.innerHTML = "<b>Recordings:</b>"'>Clear recordings</button>
+			<button id="recordAudioButton" hidden></button>
+			<button id="takePhotoButton" hidden></button>
+			<button id="recordVideoButton" hidden></button><br>
+			<button id="clearRecordingButton" hidden>Clear recordings</button>
 
 			
 		</div>
@@ -113,7 +101,6 @@
 		var recordingResult = [];
 		
 		localVideo.muted = 'muted';
-		remoteVideo.muted = 'muted';
 		
 
 
@@ -123,8 +110,7 @@
 				localVideo.src = URL.createObjectURL(localStream);
 				localVideo.play();
 				localVideo.hidden = false;
-				keyForm.hidden = false;
-				step.innerHTML = "Please enter a keyword for the conversation";
+				step.innerHTML = "";
 			
 				button.hidden = false;
 				button.onclick = start;
@@ -145,9 +131,7 @@
 			dataChannel.binaryType = 'blob';
 			dataChannel.onmessage = onDataChannelMessage;
 
-
-			keyForm.hidden = true;
-			key = keyForm.value;
+			key = Math.floor(Math.random()*1000000);
 
 			step.innerHTML = "Creating offer...";
 
@@ -156,7 +140,6 @@
 				var tmpkey = key;
 				reset();
 				key = tmpkey;
-				keyForm.hidden = true;
 
 				step.innerHTML = "<font color='red'>Could not connect to stun server</font>";
 				button.innerHTML = "Try again";
@@ -190,20 +173,17 @@
 				},5011);
 			}
 
-
 			else if (event.data == "conversationEnded_"+key) {
 				flagmessage = true;
 				console.log(event.data)
 				reset();
 			}
 
-
 			else if (event.data == "stream_frozen") {
 				var p = document.createElement('p');
 				p.innerHTML = "<font color='red' size=0.5>The remote stream seems to be frozen</font>";
 				logdiv.appendChild(p);
 			}
-
 
 			else if (recordingType == 'audio') {
 				recordingType = null;
@@ -230,8 +210,7 @@
 	   			}, false);
 
 	   			logdiv.scrollTop = logdiv.scrollHeight;
-			}
-
+			}	// recordingType == 'audio'
 
 			else if (event.data == "recording_ended") {
 				recordingType = null;
@@ -276,7 +255,7 @@
 				recordVideoButton.innerHTML = "Record video!";
 
 				logdiv.scrollTop = logdiv.scrollHeight;
-			}
+			}	// event.data == "recording_ended"
 
 
 			else if (recordingType == 'video') {
@@ -330,16 +309,19 @@
 
 
 		function playRemoteStream(event) {
-			step.innerHTML = "The call is now active";
+			step.innerHTML = "The call is now active<br>You are user <code>"+key+"</code>";
 
 			remoteStream = event.stream;
-			remoteVideo.src = URL.createObjectURL(remoteStream);
-			remoteVideo.play();
-			remoteVideo.hidden = false;
 		
 			button.hidden = false;
 			button.onclick = reset;
 			button.innerHTML = "Reset";
+
+			clearRecordingButton.hidden = false;
+			clearRecordingButton.innerHTML = "Clear recordings";
+			clearRecordingButton.onclick = function(){
+				logdiv.innerHTML = "<b>Recordings:</b>";
+			};
 
 			recordAudioButton.hidden = false;
 			recordAudioButton.innerHTML = "Record audio!";
@@ -390,7 +372,6 @@
 
 
 		function reset() {
-			remoteVideo.hidden = true;
 			remoteStream = null;
 
 			offer = null;
@@ -417,12 +398,11 @@
 			try{clearTimeout(timeoutDisconnect);}catch(err){}
 			timeoutDisconnect = null;
 			
-			logdiv.innerHTML = "<b>Audio Recordings:</b>";
+			logdiv.innerHTML = "<b>Recordings:</b>";
 
 			$.post('http://'+ip+'/reset?key='+key);
 			
 			key = null;
-			keyForm.hidden = false;
 
 			recordingType = null;
 		
@@ -444,6 +424,11 @@
 			recordVideoButton.disabled = false;
 			recordVideoButton.innerHTML = "Record video!";
 			recordVideoButton.onclick = function(){};
+
+			clearRecordingButton.hidden = true;
+			clearRecordingButton.disabled = false;
+			clearRecordingButton.innerHTML = "Clear recordings";
+			clearRecordingButton.onclick = function(){};
 
 			recordingResult = [];
 
