@@ -112,8 +112,7 @@
 				glob[key].dataChannel.onmessage = onDataChannelMessage;
 			};
 
-			glob[key].peerConnection.setRemoteDescription(
-							new mozRTCSessionDescription(data["offer"]));
+			glob[key].peerConnection.setRemoteDescription(new mozRTCSessionDescription(data["offer"]));
 
 			// Creating a timeout to check if the connection to the STUN server is taking too long
 			glob[key].timeoutSTUN = setTimeout(function(){
@@ -312,7 +311,7 @@
 
 			$.post('http://'+ip+'/reset?key='+key);
 
-			glob[key] = undefined;
+			delete glob[key];
 		}	// reset
 
 		function deleteElement(id) {

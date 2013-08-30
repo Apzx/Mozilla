@@ -32,20 +32,25 @@
 			}
 
 
-			#rules {
-				position: fixed;
-				bottom: 50px;
-				left: 20px;
+			#rulediv {
+				width: 500px;
+				padding-right: 50px;
+				float: left;
 			}
 
 			#logdiv {
 				position: fixed;
 				left: 400px;
 				top: 20px;
+				overflow: hidden;
+			}
+
+			#recorddiv {
+				width: 200px;
+				height: 95%;
 				line-height: 12px;
 				overflow-y: auto;
-				height: 95%;
-				width: 200px;
+				float: left;
 			}
 		</style>
 	</head>
@@ -67,7 +72,25 @@
 
 			
 		</div>
-		<div id="logdiv" hudden=true><b>Recordings:</b></div>
+		<div id="logdiv" hudden=true>
+			<div id="rulediv">
+				<b style="font-size: 125%">Welcome to the second part of the WebRTC diagnostic tool</b>
+				<p>This webpage is designed to be used as an echos server.</p><p>It will call a virtual machine, and you will have the option to get a feedback of either the audio or the video recieved by the callee.</p>
+				<p>The controls are in the sidebar.</p>
+				<p>
+					Once you connect to the recording bot, you will be able to request a recording of what the callee would see or hear. You can record:
+					<ul>
+						<li>A photo</li>
+						<li>A short audio recording</li>
+						<li>A short video</li>
+					</ul>
+					These recordings will be displayed in the recordings tab to be replayed
+				</p>
+				<p>To read the video, you have to click on the corresponding picture</p>
+				</p>
+			</div>
+			<div id="recorddiv"><b>Recordings:</b></div>
+		</div>
 	</body>
 
 	<script type="text/javascript"
@@ -93,7 +116,7 @@
 		var ip = '127.0.0.1:8080';
 
 		var	timeoutSTUN,
-			intervalAnswer,
+			timeoutAnswer,
 			timeoutReplay,
 			audioRecordLength = 4000,
 			timeoutDisconnect;
@@ -154,7 +177,7 @@
 					$.post('http://'+ip+'/send_offer',
 						{"key":key,"offer":{"type":offer.type,"sdp":offer.sdp}});
 					step.innerHTML = "Asking for answer with key \"<code>" + key + "</code>\" ...";
-					intervalAnswer = setInterval(askAnswer,2001);
+					askAnswer();
 				}, console.error);
 			}, console.error);
 		}	// start
@@ -165,7 +188,7 @@
 			if (event.data == "ping") {
 				dataChannel.send("pong_"+key);
 
-				try{clearTimeout(timeoutDisconnect);}catch(err){}
+				if (timeoutDisconnect != null) {clearTimeout(timeoutDisconnect);}
 
 				timeoutDisconnect = setTimeout(function() {
 					reset();
@@ -182,18 +205,18 @@
 			else if (event.data == "stream_frozen") {
 				var p = document.createElement('p');
 				p.innerHTML = "<font color='red' size=0.5>The remote stream seems to be frozen</font>";
-				logdiv.appendChild(p);
+				recorddiv.appendChild(p);
 			}
 
 			else if (recordingType == 'audio') {
 				recordingType = null;
-				logdiv.innerHTML += "<br><br>";
+				recorddiv.innerHTML += "<br><br>";
 				
 				var audioElement = document.createElement('audio');
 				audioElement.controls = "controls";
 				audioElement.style = "width: 160px;";
 
-				logdiv.appendChild(audioElement);
+				recorddiv.appendChild(audioElement);
 
 				audioElement.src = event.data;
 				audioElement.play();
@@ -206,15 +229,15 @@
 					recordVideoButton.disabled = false;
 	   				recordAudioButton.innerHTML = "Record audio!";
 
-					logdiv.scrollTop = logdiv.scrollHeight;
+					recorddiv.scrollTop = recorddiv.scrollHeight;
 	   			}, false);
 
-	   			logdiv.scrollTop = logdiv.scrollHeight;
+	   			recorddiv.scrollTop = recorddiv.scrollHeight;
 			}	// recordingType == 'audio'
 
 			else if (event.data == "recording_ended") {
 				recordingType = null;
-				logdiv.innerHTML += "<br><br>";
+				recorddiv.innerHTML += "<br><br>";
 
 				var img = document.createElement('img');
 				img.width = 160;
@@ -228,11 +251,11 @@
 				sound.preload = 'auto';
 				img.videoArray = recordingResult;
 				img.src = img.videoArray[0];
-				img.onclick = function(){
-					try{clearInterval(intervalFrame);}catch(err){}
+				img.onclick = function() {
+					if (typeof intervalFrame != undefined) {clearInterval(intervalFrame);}
 					document.getElementById(img.audiosrc).play();
 					var i = 0;
-					intervalFrame = setInterval(function(){
+					var intervalFrame = setInterval(function(){
 						img.src = img.videoArray[i];
 						i++;
 						if (i>=img.videoArray.length) {
@@ -242,10 +265,9 @@
 					},100);
 				};
 
-				logdiv.appendChild(img);
-				logdiv.appendChild(sound);
-				// logdiv.innerHTML += '<br><font size="0.5">Click on the picture to play the recoding</font>';
-				// Why in hell does this line block the onclick event!?
+				recorddiv.innerHTML += '<br><font size="0.5">Click on the picture to play the recoding</font>';
+				recorddiv.appendChild(img);
+				recorddiv.appendChild(sound);
 
 				recordingResult = [];
 
@@ -254,7 +276,7 @@
 				recordVideoButton.disabled = false;
 				recordVideoButton.innerHTML = "Record video!";
 
-				logdiv.scrollTop = logdiv.scrollHeight;
+				recorddiv.scrollTop = recorddiv.scrollHeight;
 			}	// event.data == "recording_ended"
 
 
@@ -265,7 +287,7 @@
 
 			else if (recordingType == "photo") {
 				recordingType = null;
-				logdiv.innerHTML += "<br><br>";
+				recorddiv.innerHTML += "<br><br>";
 
 				var img = document.createElement('img');
 				img.src = event.data;
@@ -273,14 +295,14 @@
 				img.width = 160;
 				img.style = "border: 1px solid black;"
 
-				logdiv.appendChild(img);
+				recorddiv.appendChild(img);
 
 				takePhotoButton.disabled = false;
 				recordAudioButton.disabled = false;
 				recordVideoButton.disabled = false;
 				takePhotoButton.innerHTML = 'Take photo!';
 
-				logdiv.scrollTop = logdiv.scrollHeight;
+				recorddiv.scrollTop = recorddiv.scrollHeight;
 			}
 
 			else {
@@ -296,10 +318,15 @@
 				dataType: "jsonp",
 				jsonpCallback: "callback",
 				success: function(data) {
-					answer = data.replace(/\r\n/g,"\\r\\n");						
-					if (answer != "Nope.avi") {
-						clearInterval(intervalAnswer);
-						intervalAnswer = null;
+					answer = data.replace(/\r\n/g,"\\r\\n");
+					if (answer == 'Nope.avi') {
+						timeoutAnswer = setTimeout(askAnswer,2001);
+					}
+					else if (answer == 'reset_please') {
+						reset();
+						step.innerHTML = "<font color='red'>An error happened while trying to process your call<br>Please try again</font>";
+					}
+					else {
 						peerConnection.setRemoteDescription(new mozRTCSessionDescription(JSON.parse(answer)));
 					}
 				}
@@ -320,7 +347,7 @@
 			clearRecordingButton.hidden = false;
 			clearRecordingButton.innerHTML = "Clear recordings";
 			clearRecordingButton.onclick = function(){
-				logdiv.innerHTML = "<b>Recordings:</b>";
+				recorddiv.innerHTML = "<b>Recordings:</b>";
 			};
 
 			recordAudioButton.hidden = false;
@@ -378,27 +405,28 @@
 			answer = null;	
 			
 			if (!flagmessage) {
-				try{dataChannel.send("conversationEnded_"+key);}catch(err){}
+				try{dataChannel.send("conversationEnded_"+key);}
+				catch(err){}
 			}
 
 			flagmessage = false;
 
-			try{peerConnection.close();}catch(err){}
+			if (peerConnection.close) {peerConnection.close();}
 			peerConnection = null;
 
-			try{clearInterval(intervalAnswer);}catch(err){}
-			intervalAnswer = null;
+			if (timeoutAnswer != null) {clearInterval(timeoutAnswer);}
+			timeoutAnswer = null;
 
-			try{clearTimeout(timeoutSTUN);}catch(err){}
+			if (timeoutSTUN != null) {clearTimeout(timeoutSTUN);}
 			timeoutSTUN = null;
 
-			try{clearTimeout(timeoutReplay);}catch(err){}
+			if (timeoutReplay != null) {clearTimeout(timeoutReplay);}
 			timeoutReplay = null;
 
-			try{clearTimeout(timeoutDisconnect);}catch(err){}
+			if (timeoutDisconnect != null) {clearTimeout(timeoutDisconnect);}
 			timeoutDisconnect = null;
 			
-			logdiv.innerHTML = "<b>Recordings:</b>";
+			recorddiv.innerHTML = "<b>Recordings:</b>";
 
 			$.post('http://'+ip+'/reset?key='+key);
 			
@@ -406,7 +434,7 @@
 
 			recordingType = null;
 		
-			step.innerHTML = "Call ended";
+			step.innerHTML = "";
 			button.onclick = start;
 			button.innerHTML = "Initiate call";
 
@@ -431,12 +459,9 @@
 			clearRecordingButton.onclick = function(){};
 
 			recordingResult = [];
-
-			try{clearInterval(intervalFrame);}catch(err){}
-			intervalFrame = null;
 		}	// reset
 				
 			
-			
+		
 	</script>
 </html>
