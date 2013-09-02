@@ -43,6 +43,7 @@
 				left: 400px;
 				top: 20px;
 				overflow: hidden;
+				height: 100%;
 			}
 
 			#recorddiv {
@@ -55,7 +56,7 @@
 		</style>
 	</head>
 	
-	<video id="localVideo" hidden=true></video>
+	<video id="localVideo" hidden muted></video>
 	
 	<body bgcolor="#EEEEFF">
 		<div id="container">
@@ -75,7 +76,8 @@
 		<div id="logdiv" hudden=true>
 			<div id="rulediv">
 				<b style="font-size: 125%">Welcome to the second part of the WebRTC diagnostic tool</b>
-				<p>This webpage is designed to be used as an echos server.</p><p>It will call a virtual machine, and you will have the option to get a feedback of either the audio or the video recieved by the callee.</p>
+				<p>This webpage is designed to be used as an echo server.</p>
+				<p>It will call a bot, and you will have the option to get a feedback of either the audio or the video recieved by the callee.</p>
 				<p>The controls are in the sidebar.</p>
 				<p>
 					Once you connect to the recording bot, you will be able to request a recording of what the callee would see or hear. You can record:
@@ -85,8 +87,6 @@
 						<li>A short video</li>
 					</ul>
 					These recordings will be displayed in the recordings tab to be replayed
-				</p>
-				<p>To read the video, you have to click on the corresponding picture</p>
 				</p>
 			</div>
 			<div id="recorddiv"><b>Recordings:</b></div>
@@ -105,10 +105,6 @@
 			peerConnection,
 			dataChannel;
 
-		var pingInterval,
-			pingDate,
-			ping = 0;
-
 		var key;
 		
 		var flagmessage = false;
@@ -117,14 +113,10 @@
 
 		var	timeoutSTUN,
 			timeoutAnswer,
-			timeoutReplay,
-			audioRecordLength = 4000,
 			timeoutDisconnect;
 
 		var recordingResult = [];
-		
-		localVideo.muted = 'muted';
-		
+				
 
 
 		window.onload = function() {
@@ -202,11 +194,11 @@
 				reset();
 			}
 
-			else if (event.data == "stream_frozen") {
+			/*else if (event.data == "stream_frozen") {
 				var p = document.createElement('p');
 				p.innerHTML = "<font color='red' size=0.5>The remote stream seems to be frozen</font>";
 				recorddiv.appendChild(p);
-			}
+			}*/
 
 			else if (recordingType == 'audio') {
 				recordingType = null;
@@ -216,26 +208,22 @@
 				audioElement.controls = "controls";
 				audioElement.style = "width: 160px;";
 
-				recorddiv.appendChild(audioElement);
+				recorddiv.innerHTML = recorddiv.innerHTML.replace('<font size="0.5">Click on the picture to play the recoding</font>','');
 
 				audioElement.src = event.data;
-				audioElement.play();
+				recorddiv.appendChild(audioElement);
+				
+				recorddiv.innerHTML += "<br>";
 
-				recordAudioButton.innerHTML = "Playing audio...";
-				audioElement.addEventListener('ended', function () {
+				takePhotoButton.disabled = false;
+				recordAudioButton.disabled = false;
+				recordVideoButton.disabled = false;
+				recordAudioButton.innerHTML = "Record audio!";
 
-					takePhotoButton.disabled = false;
-					recordAudioButton.disabled = false;
-					recordVideoButton.disabled = false;
-	   				recordAudioButton.innerHTML = "Record audio!";
-
-					recorddiv.scrollTop = recorddiv.scrollHeight;
-	   			}, false);
-
-	   			recorddiv.scrollTop = recorddiv.scrollHeight;
+				recorddiv.scrollTop = recorddiv.scrollHeight;
 			}	// recordingType == 'audio'
 
-			else if (event.data == "recording_ended") {
+			else if (event.data == "recording_ended") { //end of the video recording
 				recordingType = null;
 				recorddiv.innerHTML += "<br><br>";
 
@@ -244,7 +232,7 @@
 				img.height = 120;
 				img.style = "border: 1px solid black;"
 				var sound = document.createElement('audio');
-				var randomnumber = Math.floor(Math.random()*10000000);
+				var randomnumber = Math.floor(Math.random()*1000000)*10;
 				sound.id = randomnumber;
 				img.audiosrc = randomnumber;
 				sound.src = recordingResult.shift();
@@ -264,10 +252,12 @@
 						}
 					},100);
 				};
-
-				recorddiv.innerHTML += '<br><font size="0.5">Click on the picture to play the recoding</font>';
+				recorddiv.innerHTML = recorddiv.innerHTML.replace('<font size="0.5">Click on the picture to play the recoding</font>','');
+				recorddiv.innerHTML += '<font size="0.5">Click on the picture to play the recoding</font>';
 				recorddiv.appendChild(img);
 				recorddiv.appendChild(sound);
+
+				img.onclick();
 
 				recordingResult = [];
 
@@ -295,6 +285,7 @@
 				img.width = 160;
 				img.style = "border: 1px solid black;"
 
+				recorddiv.innerHTML = recorddiv.innerHTML.replace('<font size="0.5">Click on the picture to play the recoding</font>','');
 				recorddiv.appendChild(img);
 
 				takePhotoButton.disabled = false;
@@ -319,8 +310,17 @@
 				jsonpCallback: "callback",
 				success: function(data) {
 					answer = data.replace(/\r\n/g,"\\r\\n");
-					if (answer == 'Nope.avi') {
+					if (answer.match(/^Nope\.avi_capacity:([0-9]+)_queue:([0-9]+)_pos:([0-9]+)$/)) {
 						timeoutAnswer = setTimeout(askAnswer,2001);
+						if (RegExp.$3 == 0) {
+							step.innerHTML = "Asking for answer with key \"<code>" + key + "</code>\" ...<br>"+
+								"You are being processed for a connection";
+						}
+						else {
+							step.innerHTML = "Asking for answer with key \"<code>" + key + "</code>\" ...<br>"+
+								"You are queued "+RegExp.$3+"/"+RegExp.$2+"<br>"+
+								"The server can currently host "+RegExp.$1+" connections";
+						}
 					}
 					else if (answer == 'reset_please') {
 						reset();
@@ -419,9 +419,6 @@
 
 			if (timeoutSTUN != null) {clearTimeout(timeoutSTUN);}
 			timeoutSTUN = null;
-
-			if (timeoutReplay != null) {clearTimeout(timeoutReplay);}
-			timeoutReplay = null;
 
 			if (timeoutDisconnect != null) {clearTimeout(timeoutDisconnect);}
 			timeoutDisconnect = null;

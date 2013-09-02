@@ -4,51 +4,87 @@
 		<meta charset=utf-8 />
 		<title>Diagnostic-side</title>
 	</head>
-	<body id='body'></body>
+	<body id='body'>Bot connecting...</body>
 	<script type="text/javascript"
 			src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 
 	<script type="text/javascript">
 
+		var MAX_NUMBER_OF_SIMULTANEOUS_CONNECTIONS = 1;
+		var ip = '127.0.0.1:8080';
+
 		var localStream,
 			timeoutOffer,
-			glob = {};
+			glob = {},
+			botKey;
 		
 		var flagmessage = false;
 
-		var ip = '127.0.0.1:8080';
-
-			
-
-
+		
 
 		window.onload = function() {
 
+			$.ajax({
+				url: 'http://'+ip+'/connect?capacity='+MAX_NUMBER_OF_SIMULTANEOUS_CONNECTIONS,
+				dataType: "jsonp",
+				jsonpCallback: "callback",
+				success: function(data) {
+					botKey = data+'';
+					body.innerHTML = "<b>Connected to signaling server with id: <code>"+botKey+"</code><b><br>"
+					navigator.mozGetUserMedia({video: true, audio: true, fake: true},function(stream) {
+						localStream = stream;
+						askOffer();
+					},console.error);
+				}
+			});
+			
 
-			navigator.mozGetUserMedia({video: true, audio: true, fake: true},function(stream) {
-				localStream = stream;
-				askOffer();
-			},console.error);
 		}	// onload
 			
 
 
 
 		function askOffer() {
-			$.ajax({
-				url: 'http://'+ip+'/ask_for_offer',
-				dataType: "jsonp",
-				jsonpCallback: "callback",
-				success: function(data) {
-					if (data != "Nope.avi") {
-						gotOffer(data);
-						askOffer();
+			if (body.getElementsByTagName('div').length < MAX_NUMBER_OF_SIMULTANEOUS_CONNECTIONS) {
+				$.ajax({
+					url: 'http://'+ip+'/ask_for_offer?key='+botKey,
+					dataType: "jsonp",
+					jsonpCallback: "callback",
+					success: function(data) {
+						if (data == "Nope.avi") {
+							timeoutOffer = setTimeout(askOffer,2501);
+						}
+						else if (data == "reset_please") {
+							window.location.href = window.location.href;
+						}
+						else {
+							gotOffer(data);
+						}
 					}
-					else {
-						timeoutOffer = setTimeout(askOffer,2501);
+				});
+			}
+			else {
+				$.ajax({
+					url: 'http://'+ip+'/botKeepalive?key='+botKey,
+					dataType: "jsonp",
+					jsonpCallback: "callback",
+					success: function(data) {
+						if (data == "reset_please") {
+							window.location.href = window.location.href;
+						}
+						else {
+							timeoutOffer = setTimeout(askOffer,2501);
+						}
 					}
-				}
-			});
+				});
+			}
+
+
+
+
+			
+
+
 		}	// askOffer
 			
 			
@@ -129,7 +165,7 @@
 				setTimeout(function(){
 					$.post('http://'+ip+'/send_answer',
 						{"key":key,"answer":{"type":localDesc.type,"sdp":localDesc.sdp}});
-						// Weird bug with FF>22, decomposing the JSON bypasses the problem
+						askOffer();
 				},200);
 			},console.error,{});
 		}	// gotOffer
