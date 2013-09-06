@@ -1,25 +1,29 @@
 <!DOCTYPE html>
 <html>
 	<head>
+		<script type="text/javascript">
+			var MAX_NUMBER_OF_SIMULTANEOUS_CONNECTIONS = 2;
+			var ip = '127.0.0.1:8080';
+			
+			var recordLength = 4; // in seconds
+			var recordFPS = 10;
+			var recordHeight = 120;
+			var recordWidth = 160;
+
+		</script>
 		<meta charset=utf-8 />
-		<title>Diagnostic-side</title>
+		<title>Bot-side</title>
 	</head>
 	<body id='body'>Bot connecting...</body>
-	<script type="text/javascript"
-			src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 
+	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 	<script type="text/javascript">
 
-		var MAX_NUMBER_OF_SIMULTANEOUS_CONNECTIONS = 1;
-		var ip = '127.0.0.1:8080';
 
 		var localStream,
 			timeoutOffer,
 			glob = {},
 			botKey;
-		
-		var flagmessage = false;
-
 		
 
 		window.onload = function() {
@@ -78,13 +82,6 @@
 					}
 				});
 			}
-
-
-
-
-			
-
-
 		}	// askOffer
 			
 			
@@ -99,15 +96,14 @@
 					dataChannel: null,
 
 					pingInterval: null,
-					timeoutSTUN: null,
 					timeoutDisconnect: null,
 
-					canvasPhoto: null,
-					contextPhoto: null,
 					canvasVideo: null,
 					contextVideo: null,
 
 					notif: null,
+
+					flagping: false,
 				};
 
 			glob[key].remoteVideo = document.createElement('video');
@@ -121,21 +117,12 @@
 			glob[key].notif.innerHTML = "\""+key+"\" connected";
 			body.appendChild(glob[key].notif);
 
-			glob[key].canvasPhoto = document.createElement('canvas');
-			glob[key].canvasPhoto.id = "canvasPhoto_"+key;
-			glob[key].canvasPhoto.width = 640;
-			glob[key].canvasPhoto.height = 480;
-
-			glob[key].contextPhoto = glob[key].canvasPhoto.getContext('2d');
-
-
 			glob[key].canvasVideo = document.createElement('canvas');
 			glob[key].canvasVideo.id = "canvasVideo_"+key;
-			glob[key].canvasVideo.width = 160;
-			glob[key].canvasVideo.height = 120;
+			glob[key].canvasVideo.width = recordWidth;
+			glob[key].canvasVideo.height = recordHeight;
 
 			glob[key].contextVideo = glob[key].canvasVideo.getContext('2d');
-
 
 
 			glob[key].peerConnection = new mozRTCPeerConnection();
@@ -149,16 +136,8 @@
 			};
 
 			glob[key].peerConnection.setRemoteDescription(new mozRTCSessionDescription(data["offer"]));
-
-			// Creating a timeout to check if the connection to the STUN server is taking too long
-			glob[key].timeoutSTUN = setTimeout(function(){
-				reset(key);
-				throw "Stop Execution (Not an error)";
-			},5000);
-
+			
 			glob[key].peerConnection.createAnswer(function(localDesc) {
-				clearTimeout(glob[key].timeoutSTUN); // Connection to STUN successful
-				timeoutSTUN = null;
 
 				glob[key].peerConnection.setLocalDescription(localDesc);
 
@@ -173,38 +152,24 @@
 
 
 		function onDataChannelMessage(event) {
+			console.log(event.data)
 
 			if (event.data.match(/^pong_(.+)$/)) {
-				try{clearTimeout(glob[RegExp.$1].timeoutDisconnect);}catch(err){}
-				var tmp = RegExp.$1;
-				glob[tmp].timeoutDisconnect = setTimeout(function() {
-					reset(tmp);
+				var key = RegExp.$1;
+				clearTimeout(glob[key].timeoutDisconnect);
+
+				if (!glob[key].flagping) {
+					recordVideo(key);
+					glob[key].flagping = true;
+				}
+
+				glob[key].timeoutDisconnect = setTimeout(function() {
+					reset(key);
 				},5007);
 			}
+
 			else if (event.data.match(/^conversationEnded_(.+)$/))  {
-				flagmessage = true;
 				reset(RegExp.$1);
-			}
-
-			else if (event.data.match(/^recordAudio_(.+)$/))  {
-				recordAudio(RegExp.$1);
-			}
-
-			else if (event.data.match(/^recordVideo_(.+)$/)) {
-				recordVideo(RegExp.$1);
-			}
-
-			else if (event.data.match(/^takePhoto_(.+)$/)) {
-				takePhoto(RegExp.$1);
-			}
-
-			else if (typeof event.data != "string") {
-				console.log('Received a blob: ', event.data);
-				var binaryReader = new FileReader();
-				binaryReader.onload = function(e) {
-					console.log("Blob in text: "+e.target.result);
-				}
-				binaryReader.readAsText(event.data);
 			}
 		}	// onDataChannelMessage
 			
@@ -229,26 +194,8 @@
 
 
 
-		function recordAudio(key) {
-
-			var audioRecorder = new window.MediaRecorder(glob[key].remoteStream);
-
-			audioRecorder.ondataavailable = function(event) {
-				if (audioRecorder.state == 'recording') {
-					var reader = new FileReader();
-					reader.onload = function(e) {
-						glob[key].dataChannel.send(e.target.result);
-					};
-					audioRecorder.stop();
-					reader.readAsDataURL(event.data);
-				}
-			};
-			audioRecorder.start(4000);
-		}	// recordAudio
-
-
-
-		function recordVideo(key) {
+		function recordVideo(keyTmp) {
+			var key = keyTmp;
 			var audioRecorder = new window.MediaRecorder(glob[key].remoteStream);
 			var videoResult = [], audioResult;
 
@@ -261,8 +208,14 @@
 						glob[key].dataChannel.send(audioResult);
 						for (i in videoResult) {
 							glob[key].dataChannel.send(videoResult[i]);
+							glob[key].dataChannel.send("ping");
 						};
-						glob[key].dataChannel.send("recording_ended");
+						glob[key].dataChannel.send("recording_ended:"+	JSON.stringify({
+							"height": recordHeight,
+							"width": recordWidth,
+							"legth": recordLength,
+							"FPS": recordFPS,
+						}));
 					};
 					reader.readAsDataURL(event.data);
 					audioRecorder.stop();
@@ -273,79 +226,40 @@
 			glob[key].intervalVideoRecord = setInterval(function(){
 				glob[key].contextVideo.drawImage(glob[key].remoteVideo, 0, 0, glob[key].canvasVideo.width, glob[key].canvasVideo.height);
 				videoResult.push(glob[key].canvasVideo.toDataURL());
-			},100);
+			},1000/recordFPS);
 
-			audioRecorder.start(4000);
+			audioRecorder.start(1000*recordLength);
 
 			glob[key].timeoutVideoRecord = setTimeout(function(){
 				clearInterval(glob[key].intervalVideoRecord);
-			},4000);
+			},1000*recordLength);
 		}	// revordVideo
 
 
 
-		function takePhoto(key) {
-			glob[key].contextPhoto.drawImage(glob[key].remoteVideo, 0, 0, 640, 480);
-			var photo = glob[key].canvasPhoto.toDataURL();
-			glob[key].dataChannel.send(photo);
-
-			// verifie si le stream est bloqué, TRES demandeur de ressources
-			/*glob[key].canvasPhoto.width /= 16;
-			glob[key].canvasPhoto.height /= 16;
-
-			glob[key].contextPhoto.drawImage(glob[key].remoteVideo, 0, 0, glob[key].canvasPhoto.width, glob[key].canvasPhoto.height);
-			var photo1 = glob[key].canvasPhoto.toDataURL();
-
-			glob[key].contextPhoto.drawImage(glob[key].remoteVideo, 0, 0, glob[key].canvasPhoto.width, glob[key].canvasPhoto.height);
-			var photo2 = glob[key].canvasPhoto.toDataURL();
-
-			glob[key].canvasPhoto.width *= 16;
-			glob[key].canvasPhoto.height *= 16;
-
-
-			if (photo1 == photo2) {
-				glob[key].contextPhoto.drawImage(glob[key].remoteVideo, 0, 0, glob[key].canvasPhoto.width, glob[key].canvasPhoto.height);
-				photo1 = glob[key].canvasPhoto.toDataURL();
-
-				glob[key].contextPhoto.drawImage(glob[key].remoteVideo, 0, 0, glob[key].canvasPhoto.width, glob[key].canvasPhoto.height);
-				photo2 = glob[key].canvasPhoto.toDataURL();
-
-				if (photo1 == photo2) glob[key].dataChannel.send("stream_frozen");
-			}*/
-
-		}	// takePhoto
-			
-
-
 		function reset(key) {
-			if (!flagmessage) {
-				try{glob[key].dataChannel.send("conversation_ended");}catch(err){}
-			}
-
-			flagmessage = false;
-
+			
 			deleteElement("video_"+key);
 			deleteElement("notif_"+key);
 
-			try{clearInterval(glob[key].pingInterval);}catch(err){}
-			glob[key].pingInterval = null;
+			glob[key].peerConnection.close();
 
-			try{glob[key].peerConnection.close();}catch(err){}
-			glob[key].peerConnection = null;
-
-			try{clearTimeout(glob[key].timeoutSTUN);}catch(err){}
-			glob[key].timeoutSTUN = null;
-
-			try{clearTimeout(glob[key].timeoutDisconnect);}catch(err){}
-			glob[key].timeoutDisconnect = null;
-
-			try{clearInterval(glob[key].intervalVideoRecord);}catch(err){}
-			glob[key].intervalVideoRecord = null;
-
-			try{clearTimeout(glob[key].timeoutVideoRecord);}catch(err){}
-			glob[key].timeoutVideoRecord = null;
-
-			$.post('http://'+ip+'/reset?key='+key);
+			if (glob[key].pingInterval != null) {
+				clearInterval(glob[key].pingInterval);
+				glob[key].pingInterval=null;
+			}
+			if (glob[key].timeoutDisconnect != null) {
+				clearTimeout(glob[key].timeoutDisconnect);
+				glob[key].timeoutDisconnect=null;
+			}
+			if (glob[key].intervalVideoRecord != null) {
+				clearInterval(glob[key].intervalVideoRecord);
+				glob[key].intervalVideoRecord=null;
+			}
+			if (glob[key].timeoutVideoRecord != null) {
+				clearTimeout(glob[key].timeoutVideoRecord);
+				glob[key].timeoutVideoRecord=null;
+			}
 
 			delete glob[key];
 		}	// reset

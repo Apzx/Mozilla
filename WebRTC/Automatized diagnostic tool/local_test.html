@@ -1,0 +1,228 @@
+<html>
+	<head>
+		<meta charset=utf-8 />
+		<title>Page de Test</title>
+	</head>
+
+	<body>
+		<div id='results'>
+			<p id="result1">
+				This is a serie of test to troubleshoot most of the errors that happen with WebRTC.<br>
+				The current test will simulate a call on your computer.
+			</p>
+		</div>
+		<br>
+		<button id="button" onclick="test()">Test me!</button>
+		
+		<script type="text/javascript">
+
+			
+			
+					// Declaration des variables globales
+			var localStream1,
+				remoteStream1,
+				localStream2,
+				remoteStream2,
+				pc1,
+				pc2,
+				browser,
+				ok1 = false,
+				ok2 = false,
+				timeoutID,
+				pc1DataChannel,
+				pc2DataChannel;
+			
+			if (navigator.userAgent.match(/Firefox/)) {
+				browser = "firefox";
+				if (navigator.userAgent.match(/Firefox\/([0-9]{2})/)[1] < 23) {
+					handleError("MOZ_TOO_OLD");
+				}
+			}
+			else {
+				handleError("NOT_MOZ");
+			}
+			
+			function test() {
+				button.hidden = true;
+				setResult("Getting user media...");
+				navigator.mozGetUserMedia({video: true, audio: true},function(stream) {
+					localStream1 = stream;
+					setResult("Setting up fake stream");
+					navigator.mozGetUserMedia({video: true, audio: true, fake: true},function(stream) {
+						localStream2 = stream;
+						setResult("Testing audio/video tracks...");
+						if (localStream1.getAudioTracks().length == 0) {handleError("AUDIO_ERROR");}
+						if (localStream1.getVideoTracks().length == 0) {handleError("VIDEO_ERROR");}
+			
+			
+						setResult("Setting pc1...");
+						pc1 = new mozRTCPeerConnection();
+						pc1.addStream(localStream1);
+						pc1.onaddstream = success1;
+			
+						setResult("Setting pc2...");
+						pc2 = new mozRTCPeerConnection();
+						pc2.addStream(localStream2);
+						pc2.onaddstream = success2;
+			
+						setResult("Connectiong to internet...");
+						var tmpImg = new Image();
+						tmpImg.onerror = function() {handleError("CONNECTION_ERROR");}
+						tmpImg.onload = function() {
+							setResult("Creating offer...");
+							timeoutID = setTimeout(function(){
+								handleError("STUN_ERROR");
+							},5000);
+							pc1.createOffer(function(offer) {
+								clearTimeout(timeoutID);
+								timeoutID = null;
+								setResult("Setting pc1 localDescription...");
+								pc1.setLocalDescription(offer);
+								setResult("Setting pc2 remoteDescription...");
+								pc2.setRemoteDescription(new mozRTCSessionDescription(offer));
+								setResult("Creating answer...");
+								pc2.createAnswer(function(answer) {
+									setResult("Setting pc2 localDescription...")
+									pc2.setLocalDescription(answer);
+									setResult("Setting pc1 remoteDescription...");
+									pc1.setRemoteDescription(new mozRTCSessionDescription(answer));
+								},handleError);
+							},handleError,{});
+						}
+						tmpImg.src = "http://www.google.com/favicon.ico?cachebypass="+Math.floor(Math.random()*1000000000);
+					},handleError);
+				},handleError);
+			}
+			
+			
+			
+			function success1(event) {
+			
+				if (ok2) {
+					setResult("Locally, there is no detected error<br>Redirecting to the second partof the test...",true);
+					window.location.href = window.location.href.replace("local_test.html","user_side.html");
+				}
+				else {
+					ok1 = true;
+					setResult("Success on local view. Waiting for remote...")
+				}
+			}
+			
+			
+			function success2(event) {
+				if (ok1) {
+					setResult("Locally, there is no detected error<br>Redirecting to the second partof the test...",true);
+					window.location.href = window.location.href.replace("local_test.html","user_side.html");
+				}
+				else {
+					ok2 = true;
+					setResult("Success on remote view. Waiting for local...")
+				}
+			}
+			
+			function hangUp() {
+				localStream1 = null;
+			
+				remoteStream1 = null;
+			
+				localStream2 = null;
+			
+				remoteStream2 = null;
+			
+				if (pc1.close) {
+					pc1.close();
+				}
+				if (pc2.close) {
+					pc2.close();
+				}
+				
+				if (timeoutID != null) {
+					clearTimeout(timeoutID);
+					timeoutID = null;
+				}
+			
+				throw "This is not an error: Stop js execution"
+				
+			}
+			
+			
+			
+			function handleError (err) {
+				switch (err) {
+					case "NOT_MOZ":
+						setResult("This test is engineered to be used on Firefox",false);
+						break;
+
+					case "MOZ_TOO_OLD":
+						setResult("Your version of Firefox is not up to date<br>"+
+							"Please update Firefox in <code>Help -> About Firefox</code>",false);
+			
+					case "AUDIO_ERROR":
+						setResult("No sound is captured<ul>"+
+							"<li>Check if your microphone is properly connected or muted</li>"+
+							"</ul>",false);
+						break;
+			
+					case "VIDEO_ERROR":
+						setResult("No video is captured<ul>"+
+							"<li>Check if your webcam is properly connected or disabled</li>"+
+							"</ul>",false);
+						break;
+			
+					case "PERMISSION_DENIED":
+						setResult("The acess to the imput devices has been denied<br><ul>"+
+							"<li>Check if there is any program that might block the use of the webcam</li>"+
+							"</ul>",false);
+						break;
+			
+					case "HARDWARE_UNAVAILABLE":
+						setResult("Your input device(s) is/are alerady in use<br><ul>"+
+							"<li>Close any other application that could use your webcam or microphone</li>"+
+							"</ul>",false);
+						break;
+
+					case "NO_DEVICES_FOUND":
+						setResult("Ther are no input devices detected<br><ul>"+
+							"<li>Verify that your webcam and microphone are properly plugged</li>"+
+							"<li>Make sure that the devices are not deactivated (Control pannel in Windows)</li>"+
+							"</ul>",false);
+						break;
+			
+					case "CONNECTION_ERROR":
+						setResult("Could not connect to internet, check your connection",false);
+						break;
+			
+					case "STUN_ERROR":
+						setResult("Could not connect to STUN server.",false);
+						break;
+						
+			
+					default:
+						setResult("The following error occured:<br>"+err);
+						console.log(err);
+				}
+				hangUp();
+			}
+			
+			
+			
+			function setResult(string, success) {
+				document.getElementById("result1").innerHTML = string;
+				if (success === undefined) {}
+				else if (success == true) {
+					document.getElementById("result1").style = "color:green"
+				}
+				else if (success == false) {
+					document.getElementById("result1").style = "color:red"
+					var reloadButton = document.createElement('button');
+					reloadButton.onclick = function(){
+						window.location.href = window.location.href;
+					};
+					reloadButton.innerHTML = 'Try again';
+
+					results.appendChild(reloadButton);
+				}
+			}
+		</script>
+	</body>
+</html>

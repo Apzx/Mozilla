@@ -89,7 +89,6 @@ http.createServer(function (req, res) {
 
 
 		case '/botKeepalive':
-			console.log(queue)
 			console.log("Keepalive recieved");
 			if (typeof bots[key] == 'undefined') {
 				res.writeHead(200, {'Content-Type': 'text/*'});
