@@ -8,6 +8,15 @@
 				font-family: calibri, arial;
 			}
 
+			.question {
+
+			}
+
+			.answer {
+				padding-left: 20px;
+				font-size: 75%;
+			}
+
 			#localVideo {
 				border: 1px solid black;
 				position: fixed;
@@ -69,7 +78,28 @@
 		<div id="logdiv" hudden=true>
 			<div id="rulediv">
 				<b style="font-size: 125%">Welcome to the second part of the WebRTC diagnostic tool</b>
-				<p>Rules placeholder</p>
+				<p>Welcome to the testing application for WebRTC</p>
+				<p>This webpage is designed to simulate a call and allows you to see what your correspondant was able to see.</p>
+				<div id="FAQdiv">
+					<div class="question">The test is stuck</div>
+						<div class="answer">
+							This test was designed to work with an already working system<br>
+							Go back to <a href="loca_test.html">this test</a> and run it
+						</div>
+					<br>
+					<div class="question">The recording I get is empty</div>
+						<div class="answer">
+							This might be linked to your connection, which is too restrictive<br>
+							There is no current solutions. Contact your Network administrator
+						</div>
+					<br>
+					<div class="question">Test result/problem placeholder</div>
+						<div class="answer">
+							Answer placeholder<br>
+							Solution placeholder
+						</div>
+					<br>
+				</div>
 			</div>
 			<div id="recorddiv"><b>Recording:</b><br></div>
 		</div>
@@ -92,6 +122,8 @@
 		var	timeoutAnswer,
 			timeoutDisconnect;
 
+		var flagPing = false;
+
 		var recordingResult = [];
 
 
@@ -99,21 +131,27 @@
 
 
 		window.onload = function() {
+			$('.answer').hide();
+			$('.question').click(function(){
+				$('.answer').hide();
+				$(this).next('.answer').show();
+			});
+
 			navigator.mozGetUserMedia({video: true, audio: true},function(stream){
 				localStream = stream;
 				localVideo.src = URL.createObjectURL(localStream);
 				localVideo.play();
-				localVideo.hidden = false;
+				$("#localVideo").show();
 				step.innerHTML = "";
 
-				button.hidden = false;
+				$("#button").show();
 			},console.error);
 		}	//onload
 
 
 
 		function start() {
-			button.hidden = true;
+			$("#button").hide();
 
 			peerConnection = new mozRTCPeerConnection();
 			peerConnection.addStream(localStream);
@@ -137,69 +175,6 @@
 			}, console.error);
 		}	// start
 
-
-
-		function onDataChannelMessage (event) {
-			
-			if (event.data == "ping") {
-				dataChannel.send("pong_"+key);
-
-				if (timeoutDisconnect != null) {clearTimeout(timeoutDisconnect);
-					timeoutDisconnect = setTimeout(function() {
-						reset();
-						step.innerHTML = "<font color='red'>Connection Timeout</font>";
-					},5011);
-				}
-			}
-
-			else if (event.data.match(/^recording_ended:(.+)$/)) { //end of the video recording, end of the test
-
-				
-				var param = JSON.parse(RegExp.$1);
-
-				
-				var img = document.createElement('img');
-				img.width = param.width;
-				img.height = param.height;
-				img.style = "border: 1px solid black;"
-				var sound = document.createElement('audio');
-				var randomnumber = Math.floor(Math.random()*1000000)*10+2;
-				sound.id = randomnumber;
-				img.audiosrc = randomnumber;
-				sound.src = recordingResult.shift();
-				sound.preload = 'auto';
-				img.videoArray = recordingResult;
-				img.src = img.videoArray[0];
-				img.onclick = function() {
-					document.getElementById(img.audiosrc).play();
-					var i = 0;
-					var intervalFrame = setInterval(function(){
-						img.src = img.videoArray[i];
-						i++;
-						if (i>=img.videoArray.length) {
-							clearInterval(intervalFrame);
-							img.src = img.videoArray[0];
-						}
-					},1000/param.FPS);
-				};
-
-				recorddiv.innerHTML += '<font size="0.5">Click on the picture to play the recoding</font><br>';
-				recorddiv.appendChild(sound);
-				recorddiv.appendChild(img);
-
-				img.onclick();
-
-				recordingResult = [];
-
-				setTimeout(reset,500);
-			}	// event.data == "recording_ended"
-
-
-			else {
-				recordingResult.push(event.data);
-			}
-		}	// onDataChannelMessage
-	
 
 
 		function askAnswer(adress){
@@ -247,6 +222,78 @@
 
 
 
+		function onDataChannelMessage (event) {
+			
+			if (event.data == "ping") {
+				dataChannel.send("pong_"+key);
+
+				if (!flagPing) {
+					step.innerHTML = "<font color='red' id='recordChar'>●</font>  Recording...";
+					doBlink("recordChar");
+					setTimeout(function(){step.innerHTML = "Recording finished<br>Getting video..."},4000);
+					flagPing = true;
+				}
+
+
+				if (timeoutDisconnect != null) {clearTimeout(timeoutDisconnect);
+					timeoutDisconnect = setTimeout(function() {
+						reset();
+						step.innerHTML = "<font color='red'>Connection Timeout</font>";
+					},5011);
+				}
+			}
+
+			else if (event.data.match(/^recording_ended:(.+)$/)) { //end of the video recording, end of the test
+
+				
+				var param = JSON.parse(RegExp.$1);
+
+				recorddiv.innerHTML += '<font size="0.5">Click on the picture to play the recoding</font><br>';
+				var img = document.createElement('img');
+				img.width = param.width;
+				img.height = param.height;
+				img.style = "border: 1px solid black;";
+				var sound = document.createElement('audio');
+				var randomnumber = Math.floor(Math.random()*1000000)*10+2;
+				sound.id = randomnumber;
+				img.audiosrc = randomnumber;
+				sound.src = recordingResult.shift();
+				sound.preload = 'auto';
+				img.videoArray = recordingResult;
+				img.src = img.videoArray[0];
+				img.onclick = function() {
+					document.getElementById(img.audiosrc).play();
+					var i = 0;
+					var intervalFrame = setInterval(function(){
+						img.src = img.videoArray[i];
+						i++;
+						if (i>=img.videoArray.length) {
+							if (i == 1) {
+								recorddiv.innerHTML = "<font color='red'>There is no video to display</font>";
+								img.style = "";
+							}
+							clearInterval(intervalFrame);
+							img.src = img.videoArray[0];
+						}
+					},1000/param.FPS);
+				};
+
+				
+				recorddiv.appendChild(sound);
+				recorddiv.appendChild(img);
+
+				img.onclick();
+
+				recordingResult = [];
+
+				setTimeout(reset,500);
+			}	// event.data == "recording_ended"
+
+
+			else {
+				recordingResult.push(event.data);
+			}
+		}	// onDataChannelMessage
 		function reset() {
 			remoteStream = null;
 
@@ -271,7 +318,13 @@
 			recordingResult = [];
 		}	// reset
 				
-			
+		function doBlink(id) {
+			$("#"+id).fadeTo(500,0);
+			setTimeout(function(){
+				$("#"+id).fadeTo(500,1);
+				setTimeout(doBlink,750,id);
+			},500);
+		}
 		
 	</script>
 </html>
