@@ -30,7 +30,10 @@ http.createServer(function (req, res) {
 				"capacity": parseInt(url_parts.query.capacity),
 			};
 
-			bots[botKey].timeoutKeepAlive = setTimeout(function(){delete bots[botKey];updateCapacity()}, 5000);
+			bots[botKey].timeoutKeepAlive = setTimeout(function(){
+				delete bots[botKey];
+				updateCapacity();
+			}, 5000);
 
 			res.writeHead(200, {'Content-Type': 'text/*'});
 			res.end('callback("'+botKey+'")');
@@ -40,12 +43,12 @@ http.createServer(function (req, res) {
 
 		case '/send_offer':
 			console.log("Offer received");
-			var body = '';
+			var bodyOffer = '';
 			req.on('data', function (data) {
-				body += data;
+				bodyOffer += data;
 			});
 			req.on('end', function () {
-				var POST = qs.parse(body);
+				var POST = qs.parse(bodyOffer);
 				catalog[POST["key"]] = {};
 				catalog[POST["key"]].offer = {};
 				catalog[POST["key"]].answer = {};
@@ -65,6 +68,7 @@ http.createServer(function (req, res) {
 			if (typeof bots[key] == 'undefined') {
 				res.writeHead(200, {'Content-Type': 'text/*'});
 				res.end('callback("reset_please")');
+				console.log("reset_please on /ask_for_offer");
 			}
 			else {
 				var keyQ = queue.shift();
@@ -83,8 +87,11 @@ http.createServer(function (req, res) {
 
 				clearTimeout(bots[key].timeoutKeepAlive);
 
-				bots[key].timeoutKeepAlive = setTimeout(function(){delete bots[key];updateCapacity()}, 5000);
-		 	}
+				bots[key].timeoutKeepAlive = setTimeout(function() {
+					delete bots[key];
+					updateCapacity();
+				}, 5000);
+			}
 			break;
 
 
@@ -97,7 +104,10 @@ http.createServer(function (req, res) {
 			else {
 				clearTimeout(bots[key].timeoutKeepAlive);
 
-				bots[key].timeoutKeepAlive = setTimeout(function(){delete bots[key];updateCapacity()}, 5000);
+				bots[key].timeoutKeepAlive = setTimeout(function() {
+					delete bots[key];
+					updateCapacity();
+				}, 5000);
 
 				res.writeHead(200, {'Content-Type': 'text/*'});
 				res.end('callback("ok")');
@@ -107,12 +117,12 @@ http.createServer(function (req, res) {
 
 		case "/send_answer":
 			console.log("Answer received");
-			var body = '';
+			var bodyAnswer = '';
 			req.on('data', function (data) {
-				body += data;
+				bodyAnswer += data;
 			});
 			req.on('end', function () {
-				var POST = qs.parse(body);
+				var POST = qs.parse(bodyAnswer);
 				if (typeof catalog[POST["key"]] == 'undefined') {
 					res.writeHead(200, {'Content-Type': 'text/*'});
 					res.end('error');
@@ -132,6 +142,7 @@ http.createServer(function (req, res) {
 			if (typeof catalog[key] == 'undefined') {
 				res.writeHead(200, {'Content-Type': 'text/*'});
 				res.end('callback("reset_please")');
+				console.log("reset_please on /ask_for_answer");
 			}
 			else {
 				if (isEmpty(catalog[key].answer)) {
@@ -149,7 +160,7 @@ http.createServer(function (req, res) {
 				}
 			}
 			break;
-
+			
 
 		case "/reset":
 			delete catalog[key];
@@ -183,7 +194,7 @@ function isEmpty(obj) {
 
 function updateCapacity() {
 	var tmp = 0;
-	for (i in bots){
+	for (var i in bots){
 		tmp += bots[i].capacity;
 	}
 	totalCapacity = tmp;

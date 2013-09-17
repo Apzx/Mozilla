@@ -1,5 +1,12 @@
+
+
+
 <html>		
 	<head>
+		<script>
+			var catchMissingSTUN = true;
+			var catchMissingTURN = false;
+		</script>
 		<meta charset=utf-8 />
 		<title>User-side</title>
 		<style>		
@@ -45,21 +52,21 @@
 	
 	<script type="text/javascript">
 
-		
-		
 				// Declaration des variables globales
-		var localStream1,
-			remoteStream1,
-			localStream2,
-			remoteStream2,
-			pc1,
-			pc2,
-			browser,
-			ok1 = false,
-			ok2 = false,
-			timeoutID,
-			pc1DataChannel,
-			pc2DataChannel;
+		var localStream1;
+		var remoteStream1;
+		var localStream2;
+		var remoteStream2;
+		var pc1;
+		var pc2;
+		var offer;
+		var answer;
+		var browser;
+		var ok1 = false;
+		var ok2 = false;
+		var timeoutID;
+		var pc1DataChannel;
+		var pc2DataChannel;
 		
 		if (navigator.userAgent.match(/Firefox/)) {
 			browser = "firefox";
@@ -85,46 +92,44 @@
 		
 		
 					setResult("Setting pc1...");
-					pc1 = new mozRTCPeerConnection();
+					pc1 = new mozRTCPeerConnection({ "iceServers": 
+						[{"url": "turn:66.228.45.110:3478", "username": "aappzzxx@hotmail.fr", "credential": "apzx4906" }] });
 					pc1.addStream(localStream1);
 					pc1.onaddstream = success1;
 		
+					
 					setResult("Setting pc2...");
-					pc2 = new mozRTCPeerConnection();
+					pc2 = new mozRTCPeerConnection({ "iceServers": 
+						[{"url": "turn:66.228.45.110:3478", "username": "aappzzxx@hotmail.fr", "credential": "apzx4906" }] });
 					pc2.addStream(localStream2);
 					pc2.onaddstream = success2;
-		
-					setResult("Connectiong to internet...");
-					var tmpImg = new Image();
-					tmpImg.onerror = function() {handleError("CONNECTION_ERROR");}
-					tmpImg.onload = function() {
-						setResult("Creating offer...");
-						timeoutID = setTimeout(function(){
+							
+					setResult("Creating offer...");
+					pc1.createOffer(function(descO) {
+						offer = descO;
+						console.log(offer.sdp)
+						if (!offer.sdp.match(/srflx/) && catchMissingSTUN) {
 							handleError("STUN_ERROR");
-						},5000);
-						pc1.createOffer(function(descO) {
-							var offer = descO;
-							offer.sdp = offer.sdp.replace(/\r\na=candidate:.+? typ host/g,"");
+						}
 
-							clearTimeout(timeoutID);
-							timeoutID = null;
-							setResult("Setting pc1 localDescription...");
-							pc1.setLocalDescription(offer);
-							setResult("Setting pc2 remoteDescription...");
-							pc2.setRemoteDescription(new mozRTCSessionDescription(offer));
-							setResult("Creating answer...");
-							pc2.createAnswer(function(descA) {
-								var answer = descA;
-								answer.sdp = answer.sdp.replace(/\r\na=candidate:.+? typ host/g,"");
-
-								setResult("Setting pc2 localDescription...")
-								pc2.setLocalDescription(answer);
-								setResult("Setting pc1 remoteDescription...");
-								pc1.setRemoteDescription(new mozRTCSessionDescription(answer));
-							},handleError);
-						},handleError,{});
-					}
-					tmpImg.src = "http://www.google.com/favicon.ico?cachebypass="+Math.floor(Math.random()*1000000000);
+						timeoutID = null;
+						setResult("Setting pc1 localDescription...");
+						pc1.setLocalDescription(offer);
+						setResult("Setting pc2 remoteDescription...");
+						pc2.setRemoteDescription(new mozRTCSessionDescription(offer));
+						setResult("Creating answer...");
+						pc2.createAnswer(function(descA) {
+							answer = descA;
+							if (!answer.sdp.match(/srflx/) && catchMissingTURN) {
+								handleError("STUN_ERROR");
+							}
+							
+							setResult("Setting pc2 localDescription...")
+							pc2.setLocalDescription(answer);
+							setResult("Setting pc1 remoteDescription...");
+							pc1.setRemoteDescription(new mozRTCSessionDescription(answer));
+						},handleError);
+					},handleError,{});
 				},handleError);
 			},handleError);
 		}
@@ -134,8 +139,8 @@
 		function success1(event) {
 		
 			if (ok2) {
-				setResult("Locally, there is no detected error<br>Redirecting to the second partof the test...",true);
-				window.location.href = window.location.href.replace("local_test.html","user_side.html");
+				setResult("Locally, there is no detected error<br>Redirecting to the second part of the test...",true);
+				// window.location.href = window.location.href.replace("local_test.html","user_side.html");
 			}
 			else {
 				ok1 = true;
@@ -146,40 +151,15 @@
 		
 		function success2(event) {
 			if (ok1) {
-				setResult("Locally, there is no detected error<br>Redirecting to the second partof the test...",true);
-				window.location.href = window.location.href.replace("local_test.html","user_side.html");
+				setResult("Locally, there is no detected error<br>Redirecting to the second part of the test...",true);
+				// window.location.href = window.location.href.replace("local_test.html","user_side.html");
 			}
 			else {
 				ok2 = true;
 				setResult("Success on remote view. Waiting for local...")
 			}
 		}
-		
-		function hangUp() {
-			localStream1 = null;
-		
-			remoteStream1 = null;
-		
-			localStream2 = null;
-		
-			remoteStream2 = null;
-		
-			if (pc1.close) {
-				pc1.close();
-			}
-			if (pc2.close) {
-				pc2.close();
-			}
-			
-			if (timeoutID != null) {
-				clearTimeout(timeoutID);
-				timeoutID = null;
-			}
-		
-			throw "This is not an error: Stop js execution"
-			
-		}
-		
+				
 		
 		
 		function handleError (err) {
@@ -228,9 +208,11 @@
 					break;
 		
 				case "STUN_ERROR":
-					setResult("GetOffer failed<br>This error occurs randomly on Firefox 24<ul>"+
-						"<li>Please try again later, or install Firefox Aurora/nightly</li>"+
-						"</ul>",false);
+					setResult("Could not connect to the stun server",false);
+					break;
+
+				case "TURN_ERROR":
+					setResult("Could not connect to the turn server",false);
 					break;
 					
 		
@@ -238,7 +220,7 @@
 					setResult("The following error occured:<br>"+err);
 					console.log(err);
 			}
-			hangUp();
+			throw "This is not an error: Stop js execution";
 		}
 		
 		
@@ -261,8 +243,9 @@
 		}
 
 		function getURLParameter(name) {
-			return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
-		}
+			return decodeURIComponent(new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)')
+					.exec(location.search)||[,""])[1].replace(/\+/g, '%20')||null;
+		}	// Not my work
 
 	</script>
 </html>

@@ -9,12 +9,21 @@
 			}
 
 			.question {
-
+				cursor: pointer;
 			}
 
 			.answer {
 				padding-left: 20px;
 				font-size: 75%;
+			}
+
+			#openedQuestion {}
+
+			#FAQdiv {
+				height: 100%;
+				width: 100%;
+				overflow: auto;
+				padding-top: -20px;
 			}
 
 			#localVideo {
@@ -27,7 +36,6 @@
 				z-index: 1;
 				transform: rotateY(180deg);
 			}
-
 			
 			#container {
 				position: fixed;
@@ -39,7 +47,6 @@
 				padding-left: 20px;
 				box-shadow: 0px 0px 5px #222222;
 			}
-
 
 			#rulediv {
 				width: 500px;
@@ -56,7 +63,6 @@
 			}
 
 			#recorddiv {
-				height: 95%;
 				line-height: 12px;
 				float: left;
 			}
@@ -79,41 +85,39 @@
 			<div id="rulediv">
 				<b style="font-size: 125%">Welcome to the second part of the WebRTC diagnostic tool</b>
 				<p>Welcome to the testing application for WebRTC</p>
-				<p>This webpage is designed to simulate a call and allows you to see what your correspondant was able to see.</p>
-				<div id="FAQdiv">
-					<div class="question">The test is stuck</div>
-						<div class="answer">
+				<p>This webpage is designed to simulate a call and allows you to see what your correspondant would be able to see.</p>
+				<p>Please run the rest twice to make sure that the results are the same</p>
+				<b>How to interpret the results:</b>
+				<ul id="FAQdiv">
+					<li class="question">The test is stuck</li>
+						<div class="answer" hidden>
 							This test was designed to work with an already working system<br>
-							Go back to <a href="loca_test.html">this test</a> and run it
+							Go back to <a href="local_test.html">this test</a> and run it
 						</div>
-					<br>
-					<div class="question">The recording I get is empty</div>
-						<div class="answer">
+					<li class="question">The recording I get is empty</li>
+						<div class="answer" hidden>
 							This might be linked to your connection, which is too restrictive<br>
 							There is no current solutions. Contact your Network administrator
 						</div>
-					<br>
-					<div class="question">Test result/problem placeholder</div>
-						<div class="answer">
+					<li class="question">Test result/problem placeholder</li>
+						<div class="answer" hidden>
 							Answer placeholder<br>
 							Solution placeholder
 						</div>
-					<br>
-				</div>
+				</ul>
 			</div>
 			<div id="recorddiv"><b>Recording:</b><br></div>
 		</div>
 	</body>
 
-	<script type="text/javascript"
-			src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 			
 	<script type="text/javascript">
 
-		var localStream,
-			remoteStream,
-			peerConnection,
-			dataChannel;
+		var localStream;
+		var remoteStream;
+		var peerConnection;
+		var dataChannel;
 
 		var key;
 		
@@ -125,18 +129,19 @@
 		var flagPing = false;
 
 		var recordingResult = [];
+		var param = {empty:true};
 
-
-				
 
 
 		window.onload = function() {
-			$('.answer').hide();
-			$('.question').click(function(){
-				$('.answer').hide();
-				$(this).next('.answer').show();
+
+			$('.question').click(function() {
+				var toggle = $(this).nextUntil('.question');
+				toggle.slideToggle();
+				$('.answer').not(toggle).slideUp();
 			});
 
+			
 			navigator.mozGetUserMedia({video: true, audio: true},function(stream){
 				localStream = stream;
 				localVideo.src = URL.createObjectURL(localStream);
@@ -147,7 +152,6 @@
 				$("#button").show();
 			},console.error);
 		}	//onload
-
 
 
 		function start() {
@@ -203,7 +207,7 @@
 					else {
 						peerConnection.setRemoteDescription(new mozRTCSessionDescription(JSON.parse(answer)));
 					}
-				}
+				},
 			});
 		}	// askAnswer
 
@@ -225,17 +229,18 @@
 		function onDataChannelMessage (event) {
 			
 			if (event.data == "ping") {
-				dataChannel.send("pong_"+key);
+				dataChannel.send("pong");
 
 				if (!flagPing) {
 					step.innerHTML = "<font color='red' id='recordChar'>●</font>  Recording...";
 					doBlink("recordChar");
-					setTimeout(function(){step.innerHTML = "Recording finished<br>Getting video..."},4000);
+					setTimeout(function(){step.innerHTML = "Recording finished<br>Setting up video..."},4000);
 					flagPing = true;
 				}
 
 
-				if (timeoutDisconnect != null) {clearTimeout(timeoutDisconnect);
+				if (timeoutDisconnect != null) {
+					clearTimeout(timeoutDisconnect);
 					timeoutDisconnect = setTimeout(function() {
 						reset();
 						step.innerHTML = "<font color='red'>Connection Timeout</font>";
@@ -244,10 +249,25 @@
 			}
 
 			else if (event.data.match(/^recording_ended:(.+)$/)) { //end of the video recording, end of the test
+				param = JSON.parse(RegExp.$1);
+				param.empty = false;
+			}
 
-				
-				var param = JSON.parse(RegExp.$1);
+			
+			else if (param.empty == true) {
 
+				if (timeoutDisconnect != null) {
+					clearTimeout(timeoutDisconnect);
+					timeoutDisconnect = setTimeout(function() {
+						reset();
+						step.innerHTML = "<font color='red'>Connection Timeout</font>";
+					},5011);
+				}
+
+				recordingResult.push(event.data);
+			}
+
+			else if (param.FPS != undefined) {
 				recorddiv.innerHTML += '<font size="0.5">Click on the picture to play the recoding</font><br>';
 				var img = document.createElement('img');
 				img.width = param.width;
@@ -257,7 +277,7 @@
 				var randomnumber = Math.floor(Math.random()*1000000)*10+2;
 				sound.id = randomnumber;
 				img.audiosrc = randomnumber;
-				sound.src = recordingResult.shift();
+				sound.src = event.data;
 				sound.preload = 'auto';
 				img.videoArray = recordingResult;
 				img.src = img.videoArray[0];
@@ -287,19 +307,21 @@
 				recordingResult = [];
 
 				setTimeout(reset,500);
-			}	// event.data == "recording_ended"
 
+			}	// play recording
 
 			else {
-				recordingResult.push(event.data);
+				console.log("mesage: ",event.data);
 			}
+
+
 		}	// onDataChannelMessage
 		function reset() {
 			remoteStream = null;
 
 			step.innerHTML = "Test finished";
 			
-			dataChannel.send("conversationEnded_"+key);
+			dataChannel.send("conversationEnded");
 
 			if (peerConnection != null) {peerConnection.close();}
 			peerConnection = null;
