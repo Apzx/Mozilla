@@ -20,7 +20,7 @@
 	</head>
 	<body id='body'>Bot connecting...</body>
 
-	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+	<script type="text/javascript" src="jQuery.min.js"></script>
 	<script type="text/javascript">
 		var localStream,
 			timeoutOffer,
@@ -30,7 +30,7 @@
 		window.onload = function() {
 
 			$.ajax({
-				url: 'http://'+ip+'/connect?capacity='+MAX_NUMBER_OF_SIMULTANEOUS_CONNECTIONS,
+				url: 'http://'+ip+'/bot_connect?capacity='+MAX_NUMBER_OF_SIMULTANEOUS_CONNECTIONS,
 				dataType: "jsonp",
 				jsonpCallback: "callback",
 				success: function(data) {
@@ -169,11 +169,7 @@
 			
 			that.peerConnection.createAnswer(function(localDesc) {
 				that.peerConnection.setLocalDescription(localDesc);
-				setTimeout(function(){
-					$.post('http://'+ip+'/send_answer',
-						{"key":that.key,"answer":{"type":localDesc.type,"sdp":localDesc.sdp}});
-						askOffer();
-				},200);
+				$.post('http://'+ip+'/send_answer?key='+that.key, {"type":localDesc.type,"sdp":localDesc.sdp});
 			},console.error,{});
 		}
 

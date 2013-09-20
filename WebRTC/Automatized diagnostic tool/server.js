@@ -1,6 +1,7 @@
 var http = require('http'),
 	url = require('url'),
 	qs = require("querystring"),
+	fs = require("fs"),
 	catalog = {},
 	queue = [],
 	bots = {
@@ -20,14 +21,14 @@ http.createServer(function (req, res) {
 	switch(req.url.split("?")[0]) {
 		
 
-		case '/connect':
+		case '/bot_connect':
 
-			console.log("Connection request recieved");
+			console.log("Bot connection request recieved");
 			var botKey = Math.floor(Math.random()*1000000)*10+1;
 
 			bots[botKey] = {
 				"timeoutKeepAlive": null,
-				"capacity": parseInt(url_parts.query.capacity),
+				"capacity": parseInt(url_parts.query.capacity)
 			};
 
 			bots[botKey].timeoutKeepAlive = setTimeout(function(){
@@ -40,25 +41,39 @@ http.createServer(function (req, res) {
 			updateCapacity();
 			break;
 
+		case "/user_connect":
+			console.log("User connection request recieved");
+			catalog[key] = new UserLink(req, res, key);
+			catalog[key].sendEvent("connected");
+			catalog[key].req.connection.addListener("close", function () {
+				delete catalog[key];
+				var tmp = queue.indexOf(key);
+				if (tmp != -1) {queue.splice(tmp, 1);}
 
-		case '/send_offer':
-			console.log("Offer received");
+				console.log("Reset performed on key: "+key);
+			}, false);
+			break;
+
+
+		case "/send_offer":
+			console.log("Offer received and sent to key: "+key);
+
 			var bodyOffer = '';
 			req.on('data', function (data) {
 				bodyOffer += data;
 			});
 			req.on('end', function () {
 				var POST = qs.parse(bodyOffer);
-				catalog[POST["key"]] = {};
-				catalog[POST["key"]].offer = {};
-				catalog[POST["key"]].answer = {};
-				catalog[POST["key"]].offer.type = POST["offer[type]"];
-				catalog[POST["key"]].offer.sdp = POST["offer[sdp]"];
 
-				queue.push(POST["key"]);
-				
 				res.writeHead(200, {'Content-Type': 'text/*'});
 				res.end('ok');
+
+				catalog[key].offer = POST;
+				queue.push(key);
+
+				for (var i in catalog) {
+					catalog[i].updateQueue();
+				}
 			});
 			break;
 
@@ -68,7 +83,6 @@ http.createServer(function (req, res) {
 			if (typeof bots[key] == 'undefined') {
 				res.writeHead(200, {'Content-Type': 'text/*'});
 				res.end('callback("reset_please")');
-				console.log("reset_please on /ask_for_offer");
 			}
 			else {
 				var keyQ = queue.shift();
@@ -78,11 +92,10 @@ http.createServer(function (req, res) {
 					console.log("Do not have one");
 				}
 				else {
-					console.log("Sending pendingOffer...");
 					res.writeHead(200, {'Content-Type': 'text/*'});
 
 					res.end('callback('+JSON.stringify({"key":keyQ,"offer":catalog[keyQ].offer})+')');
-					console.log("PendingOffer sent");
+					console.log("Offer sent");
 				}
 
 				clearTimeout(bots[key].timeoutKeepAlive);
@@ -116,49 +129,20 @@ http.createServer(function (req, res) {
 
 
 		case "/send_answer":
-			console.log("Answer received");
+			console.log("Answer received for key: "+key);
 			var bodyAnswer = '';
 			req.on('data', function (data) {
 				bodyAnswer += data;
 			});
 			req.on('end', function () {
 				var POST = qs.parse(bodyAnswer);
-				if (typeof catalog[POST["key"]] == 'undefined') {
-					res.writeHead(200, {'Content-Type': 'text/*'});
-					res.end('error');
-				}
-					else {
-					catalog[POST["key"]].answer.type = POST["answer[type]"];
-					catalog[POST["key"]].answer.sdp = POST["answer[sdp]"];
-					res.writeHead(200, {'Content-Type': 'text/*'});
-					res.end('ok');
-				}
-			});
-			break;
+				
+				var tmp = POST;
+				catalog[key].sendEvent("answer",JSON.stringify(tmp));
 
-
-		case "/ask_for_answer":
-			console.log("Got asked for answer on key: "+key);
-			if (typeof catalog[key] == 'undefined') {
 				res.writeHead(200, {'Content-Type': 'text/*'});
-				res.end('callback("reset_please")');
-				console.log("reset_please on /ask_for_answer");
-			}
-			else {
-				if (isEmpty(catalog[key].answer)) {
-					res.writeHead(200, {'Content-Type': 'text/*'});
-					res.end('callback("Nope.avi_capacity:'+totalCapacity+
-						'_queue:'+queue.length+'_pos:'+(queue.indexOf(key)+1)+'")');
-					console.log("Asked for answer, do not have one");
-				}
-				else {
-					console.log("Sending pendingAnswer...");
-					res.writeHead(200, {'Content-Type': 'text/*'});
-					res.end('callback(\''+JSON.stringify(catalog[key].answer)+'\')');
-					console.log("pendingAnswer sent");
-					delete catalog[key];
-				}
-			}
+				res.end('ok');
+			});
 			break;
 			
 
@@ -173,15 +157,67 @@ http.createServer(function (req, res) {
 			res.end('ok');
 			break;
 
-		default:
-			console.log('Request received from url:',req.url);
-			res.writeHead(200, {'Content-Type': 'text/*'});
-			res.end("You are not supposed to be here.<br>"+req.url);
+		case "/":
+			console.log("Home requested");
+			res.writeHead(200, {"Content-Type":"text/html"});
+			res.end("Hey, kid, do you want some candy?");
 			break;
+
+		default:
+			var file = req.url.replace("/","");
+			console.log(file," requested");
+			fs.exists(file, function(exists) {
+				if (exists) {
+					fs.readFile(file, function(error, content) {
+						if (error) {
+							res.writeHead(500);
+							res.end();
+						} else {
+							res.writeHead(200, {"Content-Type":"text/html"});
+							res.end(content, "utf-8");
+						}
+					});
+				} else {
+					res.writeHead(404);
+					res.end("Oh noes, 404!");
+				}
+			});
 	}
 	
 }).listen(8080);
 
+
+function UserLink(pReq,pRes,pKey) {
+	var that = this;
+
+	that.key = pKey;
+	that.offer = {};
+	that.req = pReq;
+	that.res = pRes;
+
+	that.res.writeHead(200, {"Content-Type":"text/event-stream", "Cache-Control":"no-cache", "Connection":"keep-alive"});
+	that.res.write("retry: 10000\n");
+
+	that.req.connection.addListener("close", function () {
+		delete that;
+	}, false);
+}
+
+UserLink.prototype.updateQueue = function() {
+	var that = this;
+	var tmp = {
+		capacity: totalCapacity,
+		queue: queue.length,
+		position: queue.indexOf(that.key)+1,
+	};
+	that.sendEvent("updateQueue",JSON.stringify(tmp));
+};
+
+UserLink.prototype.sendEvent = function(eventName, eventData) {
+	var that = this;
+	that.res.write("event: "+eventName+"\n");
+	that.res.write("data: "+eventData+"\n\n");
+};
 
 
 function isEmpty(obj) {

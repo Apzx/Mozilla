@@ -92,15 +92,13 @@
 		
 		
 					setResult("Setting pc1...");
-					pc1 = new mozRTCPeerConnection({ "iceServers": 
-						[{"url": "turn:66.228.45.110:3478", "username": "aappzzxx@hotmail.fr", "credential": "apzx4906" }] });
+					pc1 = new mozRTCPeerConnection();
 					pc1.addStream(localStream1);
 					pc1.onaddstream = success1;
 		
 					
 					setResult("Setting pc2...");
-					pc2 = new mozRTCPeerConnection({ "iceServers": 
-						[{"url": "turn:66.228.45.110:3478", "username": "aappzzxx@hotmail.fr", "credential": "apzx4906" }] });
+					pc2 = new mozRTCPeerConnection();
 					pc2.addStream(localStream2);
 					pc2.onaddstream = success2;
 							
@@ -137,7 +135,7 @@
 		
 		
 		function success1(event) {
-		
+			console.log("1"); //Debug marker
 			if (ok2) {
 				setResult("Locally, there is no detected error<br>Redirecting to the second part of the test...",true);
 				// window.location.href = window.location.href.replace("local_test.html","user_side.html");
@@ -150,6 +148,7 @@
 		
 		
 		function success2(event) {
+			console.log("2"); //Debug marker
 			if (ok1) {
 				setResult("Locally, there is no detected error<br>Redirecting to the second part of the test...",true);
 				// window.location.href = window.location.href.replace("local_test.html","user_side.html");

@@ -75,9 +75,9 @@
 		<div id="container">
 			<h2>User-side of my WebRTC tool</h2>
 		
-			<p id="step">Waiting for the user medias (Audio + video)</p>
+			<p id="step">Waiting for the user media...</p>
 			
-			<button id="button" hidden onclick="start()">Initiate test</button>
+			<button id="button" hidden onclick="echoTest()">Execute test</button>
 
 			
 		</div>
@@ -91,8 +91,8 @@
 				<ul id="FAQdiv">
 					<li class="question">The test is stuck</li>
 						<div class="answer" hidden>
-							This test was designed to work with an already working system<br>
-							Go back to <a href="local_test.html">this test</a> and run it
+							Please refresh the webpage and rerun the test<br>
+							If it still doesn't works, go back to <a href="local_test.html">this test</a> and run it
 						</div>
 					<li class="question">The recording I get is empty</li>
 						<div class="answer" hidden>
@@ -110,28 +110,10 @@
 		</div>
 	</body>
 
-	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+	<script type="text/javascript" src="jQuery.min.js"></script>
 			
 	<script type="text/javascript">
-
 		var localStream;
-		var remoteStream;
-		var peerConnection;
-		var dataChannel;
-
-		var key;
-		
-		var ip = '127.0.0.1:8080';
-
-		var	timeoutAnswer,
-			timeoutDisconnect;
-
-		var flagPing = false;
-
-		var recordingResult = [];
-		var param = {empty:true};
-
-
 
 		window.onload = function() {
 
@@ -141,21 +123,154 @@
 				$('.answer').not(toggle).slideUp();
 			});
 
-			
 			navigator.mozGetUserMedia({video: true, audio: true},function(stream){
 				localStream = stream;
-				localVideo.src = URL.createObjectURL(localStream);
-				localVideo.play();
-				$("#localVideo").show();
 				step.innerHTML = "";
+				localTest();
+			},handleError);
 
-				$("#button").show();
-			},console.error);
 		}	//onload
 
 
-		function start() {
-			$("#button").hide();
+		function localTest() {
+
+
+			var localStream1;
+			var remoteStream1;
+			var localStream2;
+			var remoteStream2;
+			var pc1;
+			var pc2;
+			var offer;
+			var answer;
+			var ok1 = false;
+			var ok2 = false;
+			var timeoutID;
+			
+			if (navigator.userAgent.match(/Firefox/)) {
+				if (navigator.userAgent.match(/Firefox\/([0-9]{2})/)[1] < 23) {
+					handleError("MOZ_TOO_OLD");
+				}
+			}
+			else {
+				handleError("NOT_MOZ");
+			}
+			
+			localStream1 = localStream;
+			setResult("Setting up fake stream...");
+			navigator.mozGetUserMedia({video: true, audio: true, fake: true},function(stream) {
+				localStream2 = stream;
+				setResult("Testing audio/video tracks...");
+				if (localStream1.getAudioTracks().length == 0) {handleError("AUDIO_ERROR");}
+				if (localStream1.getVideoTracks().length == 0) {handleError("VIDEO_ERROR");}
+			
+				setResult("Setting pc1...");
+				pc1 = new mozRTCPeerConnection();
+				pc1.addStream(localStream1);
+				pc1.onaddstream = function() {
+					if (ok2) {
+						setResult("The first test is a sucess<br>Please execute the second test", true);
+						button.onclick = echoTest;
+						button.hidden = false;
+						button.innerHTML = "Execute test";
+					}
+					else {
+						ok1 = true;
+						setResult("Success on view 1. Waiting for view 2...");
+					}
+				};
+			
+				
+				setResult("Setting pc2...");
+				pc2 = new mozRTCPeerConnection();
+				pc2.addStream(localStream2);
+				pc2.onaddstream = function() {
+					if (ok1) {
+						setResult("The first test is a sucess<br>Please execute the second test", true);
+						button.onclick = echoTest;
+						button.hidden = false;
+						button.innerHTML = "Execute test";
+					}
+					else {
+						ok2 = true;
+						setResult("Success on view 2. Waiting for view 1...");
+					}
+				};
+						
+				setResult("Creating offer...");
+				pc1.createOffer(function(descO) {
+					offer = descO;
+					if (!offer.sdp.match(/srflx/) && false) {
+						handleError("STUN_ERROR");
+					}
+
+					timeoutID = null;
+					setResult("Setting pc1 localDescription...");
+					pc1.setLocalDescription(offer);
+					setResult("Setting pc2 remoteDescription...");
+					pc2.setRemoteDescription(new mozRTCSessionDescription(offer));
+					setResult("Creating answer...");
+					pc2.createAnswer(function(descA) {
+						answer = descA;
+						if (!answer.sdp.match(/srflx/) && false) {
+							handleError("STUN_ERROR");
+						}
+						
+						setResult("Setting pc2 localDescription...")
+						pc2.setLocalDescription(answer);
+						setResult("Setting pc1 remoteDescription...");
+						pc1.setRemoteDescription(new mozRTCSessionDescription(answer));
+						button.hidden = false;
+					},handleError);
+				},handleError);
+			},handleError);
+
+			function setResult(string, success) {
+				step.innerHTML = string;
+				if (success === undefined) {
+					step.style = "";
+				}
+				else if (success == true) {
+					step.style = "color:green"
+				}
+				else if (success == false) {
+					step.style = "color:red"
+					
+					button.onclick = function(){
+						window.location.href = window.location.href;
+					};
+					button.innerHTML = 'Try again';
+					button.hidden = false;
+				}
+			}
+	
+		}	// localTest
+
+
+		function echoTest() {
+			button.hidden = true;
+
+			var remoteStream;
+			var peerConnection;
+			var dataChannel;
+			var offer;
+
+			var key;
+			
+			var ip = '127.0.0.1:8080';
+
+			var	timeoutAnswer,
+				timeoutDisconnect;
+
+			var flagPing = false;
+
+			var recordingResult = [];
+			var param = {empty:true};
+
+			localVideo.src = URL.createObjectURL(localStream);
+			localVideo.play();
+			localVideo.hidden = false;
+			setResult("");
 
 			peerConnection = new mozRTCPeerConnection();
 			peerConnection.addStream(localStream);
@@ -166,179 +281,204 @@
 
 			key = Math.floor(Math.random()*1000000)*10;
 
-			step.innerHTML = "Creating offer...";
-			peerConnection.createOffer(function(offer) {
-				step.innerHTML = "Setting local description...";
+			setResult("Creating offer...");
+			peerConnection.createOffer(function(tmp2) {
+				offer = tmp2;
+				setResult("Setting local description...");
 				peerConnection.setLocalDescription(offer, function() {
-					step.innerHTML = "Sending offer...";
-					$.post('http://'+ip+'/send_offer',
-						{"key":key,"offer":{"type":offer.type,"sdp":offer.sdp}});
-					step.innerHTML = "Asking for answer with key \"<code>" + key + "</code>\" ...";
-					askAnswer();
-				}, console.error);
-			}, console.error);
-		}	// start
+					setResult("Setting up connection to the signaling server...");
+					connection = new EventSource("user_connect?key="+key);
 
+					connection.addEventListener("connected", function(event) {
+						setResult("Sending offer...");
+						$.post('http://'+ip+'/send_offer?key='+key,
+							{"type":offer.type,"sdp":offer.sdp});
+						setResult("Waiting for answer...");
+					}, false);
 
-
-		function askAnswer(adress){
-			$.ajax({
-				url: 'http://'+ip+'/ask_for_answer?key='+key,
-				dataType: "jsonp",
-				jsonpCallback: "callback",
-				success: function(data) {
-					var answer = data.replace(/\r\n/g,"\\r\\n");
-					if (answer.match(/^Nope\.avi_capacity:([0-9]+)_queue:([0-9]+)_pos:([0-9]+)$/)) {
-						timeoutAnswer = setTimeout(askAnswer,2001);
-						if (RegExp.$3 == 0) {
-							step.innerHTML = "Asking for answer with key \"<code>" + key + "</code>\" ...<br>"+
-								"You are being processed for a connection";
+					connection.addEventListener("updateQueue", function(event) {
+						var tmp = JSON.parse(event.data);
+						if (tmp.position == 0) {
+							setResult("Waiting for answer...<br>"+
+									"You are being processed for a connection");
 						}
 						else {
-							step.innerHTML = "Asking for answer with key \"<code>" + key + "</code>\" ...<br>"+
-								"You are queued "+RegExp.$3+"/"+RegExp.$2+"<br>"+
-								"The server can currently host "+RegExp.$1+" connections";
+							setResult("Waiting for answer...<br>"+
+								"You are queued "+tmp.position+"/"+tmp.queue+"<br>"+
+								"The server can currently host "+tmp.capacity+" connections");
 						}
-					}
-					else if (answer == 'reset_please') {
+					}, false);
+
+					connection.addEventListener("error", function(event) {
+						console.log("event fired: error"); //Debug marker
 						reset();
-						step.innerHTML = "<font color='red'>An error happened while trying to process your call<br>Please try again</font>";
+						setResult("An error happened while trying to process your call",false);
+						button.onclick = echoTest;
+					}, false);
+					
+					connection.addEventListener("answer", function(event) {
+						peerConnection.setRemoteDescription(new mozRTCSessionDescription(JSON.parse(event.data)));
+						setResult("Setting up peerConnection...");
+						connection.close();
+					}, false);
+
+					
+				}, console.error);
+			}, console.error);
+
+
+
+			function playRemoteStream(event) {
+				setResult("Setting up dataChannel...");
+
+				remoteStream = event.stream;
+				
+				timeoutDisconnect = setTimeout(function() {
+					reset();
+					setResult("DataChannel could not be etablished",false);
+				},10011);
+			}	// playRemoteStream
+
+
+
+			function onDataChannelMessage (event) {
+				
+				if (event.data == "ping") {
+					dataChannel.send("pong");
+
+					if (!flagPing) {
+						setResult("<font color='red' id='recordChar'>●</font>  Recording...");
+						doBlink("recordChar");
+						flagPing = true;
+						setTimeout(function(){setResult("Setting up replay...");},4000);
 					}
-					else {
-						peerConnection.setRemoteDescription(new mozRTCSessionDescription(JSON.parse(answer)));
+
+
+					if (timeoutDisconnect != null) {
+						clearTimeout(timeoutDisconnect);
+						timeoutDisconnect = setTimeout(function() {
+							reset();
+							setResult("Connection Timeout",false);
+						},5011);
 					}
-				},
-			});
-		}	// askAnswer
-
-
-
-		function playRemoteStream(event) {
-			step.innerHTML = "The test is underway<br>You are user <code>"+key+"</code>";
-
-			remoteStream = event.stream;
-			
-			timeoutDisconnect = setTimeout(function() {
-				reset();
-				step.innerHTML = "<font color='red'>DataChannel could not be etablished</font>";
-			},10011);
-		}	// playRemoteStream
-
-
-
-		function onDataChannelMessage (event) {
-			
-			if (event.data == "ping") {
-				dataChannel.send("pong");
-
-				if (!flagPing) {
-					step.innerHTML = "<font color='red' id='recordChar'>●</font>  Recording...";
-					doBlink("recordChar");
-					setTimeout(function(){step.innerHTML = "Recording finished<br>Setting up video..."},4000);
-					flagPing = true;
 				}
 
-
-				if (timeoutDisconnect != null) {
-					clearTimeout(timeoutDisconnect);
-					timeoutDisconnect = setTimeout(function() {
-						reset();
-						step.innerHTML = "<font color='red'>Connection Timeout</font>";
-					},5011);
+				else if (event.data.match(/^recording_ended:(.+)$/)) { //end of the video recording
+					param = JSON.parse(RegExp.$1);
+					param.empty = false;
 				}
-			}
-
-			else if (event.data.match(/^recording_ended:(.+)$/)) { //end of the video recording, end of the test
-				param = JSON.parse(RegExp.$1);
-				param.empty = false;
-			}
-
-			
-			else if (param.empty == true) {
-
-				if (timeoutDisconnect != null) {
-					clearTimeout(timeoutDisconnect);
-					timeoutDisconnect = setTimeout(function() {
-						reset();
-						step.innerHTML = "<font color='red'>Connection Timeout</font>";
-					},5011);
-				}
-
-				recordingResult.push(event.data);
-			}
-
-			else if (param.FPS != undefined) {
-				recorddiv.innerHTML += '<font size="0.5">Click on the picture to play the recoding</font><br>';
-				var img = document.createElement('img');
-				img.width = param.width;
-				img.height = param.height;
-				img.style = "border: 1px solid black;";
-				var sound = document.createElement('audio');
-				var randomnumber = Math.floor(Math.random()*1000000)*10+2;
-				sound.id = randomnumber;
-				img.audiosrc = randomnumber;
-				sound.src = event.data;
-				sound.preload = 'auto';
-				img.videoArray = recordingResult;
-				img.src = img.videoArray[0];
-				img.onclick = function() {
-					document.getElementById(img.audiosrc).play();
-					var i = 0;
-					var intervalFrame = setInterval(function(){
-						img.src = img.videoArray[i];
-						i++;
-						if (i>=img.videoArray.length) {
-							if (i == 1) {
-								recorddiv.innerHTML = "<font color='red'>There is no video to display</font>";
-								img.style = "";
-							}
-							clearInterval(intervalFrame);
-							img.src = img.videoArray[0];
-						}
-					},1000/param.FPS);
-				};
 
 				
-				recorddiv.appendChild(sound);
-				recorddiv.appendChild(img);
+				else if (param.empty == true) {
 
-				img.onclick();
+					if (timeoutDisconnect != null) {
+						clearTimeout(timeoutDisconnect);
+						timeoutDisconnect = setTimeout(function() {
+							reset();
+							setResult("Connection Timeout",false);
+						},5011);
+					}
+
+					recordingResult.push(event.data);
+				}
+
+				else if (param.empty != true) {
+					recorddiv.innerHTML += '<font size="0.5">Click on the picture to play the recoding</font><br>';
+					var img = document.createElement('img');
+					img.width = param.width;
+					img.height = param.height;
+					img.style = "border: 1px solid black;transform: rotateY(180deg);";
+					var sound = document.createElement('audio');
+					var randomnumber = Math.floor(Math.random()*1000000)*10+2;
+					sound.id = randomnumber;
+					img.audiosrc = randomnumber;
+					sound.src = event.data;
+					sound.preload = 'auto';
+					img.videoArray = recordingResult;
+					img.src = img.videoArray[0];
+					img.onclick = function() {
+						document.getElementById(img.audiosrc).play();
+						var i = 0;
+						var intervalFrame = setInterval(function(){
+							img.src = img.videoArray[i];
+							i++;
+							if (i>=img.videoArray.length) {
+								if (i == 1) {
+									recorddiv.innerHTML = "<font color='red'>There is no video to display</font>";
+									img.style = "";
+								}
+								clearInterval(intervalFrame);
+								img.src = img.videoArray[0];
+							}
+						},1000/param.FPS);
+					};
+
+					
+					recorddiv.appendChild(sound);
+					recorddiv.appendChild(img);
+
+					img.onclick();
+
+
+					
+					setResult("Test finished",true);
+					dataChannel.send("conversationEnded");
+					peerConnection.close();
+					clearTimeout(timeoutDisconnect);
+
+				}	// play recording
+
+				else {
+					console.log("mesage: ",event.data);
+				}
+
+
+			}	// onDataChannelMessage
+
+
+
+			function reset() {
+				remoteStream = null;
+				
+				try{dataChannel.send("conversationEnded");}catch(e){}
+
+				if (peerConnection != null) {peerConnection.close();}
+				peerConnection = null;
+
+				if (timeoutAnswer != null) {clearInterval(timeoutAnswer);}
+				timeoutAnswer = null;
+
+				if (timeoutDisconnect != null) {clearTimeout(timeoutDisconnect);}
+				timeoutDisconnect = null;
+				
+
+				$.post('http://'+ip+'/reset?key='+key);
+				
+				key = null;
 
 				recordingResult = [];
+			}	// reset
 
-				setTimeout(reset,500);
-
-			}	// play recording
-
-			else {
-				console.log("mesage: ",event.data);
+			function setResult(string, success) {
+				step.innerHTML = string;
+				if (success === undefined) {
+					step.style = "";
+				}
+				else if (success == true) {
+					step.style = "color:green"
+				}
+				else if (success == false) {
+					step.style = "color:red"
+					
+					button.onclick = echoTest;
+					button.innerHTML = 'Try again';
+					button.hidden = false;
+				}
 			}
 
+		}	// echoTest
 
-		}	// onDataChannelMessage
-		function reset() {
-			remoteStream = null;
 
-			step.innerHTML = "Test finished";
-			
-			dataChannel.send("conversationEnded");
-
-			if (peerConnection != null) {peerConnection.close();}
-			peerConnection = null;
-
-			if (timeoutAnswer != null) {clearInterval(timeoutAnswer);}
-			timeoutAnswer = null;
-
-			if (timeoutDisconnect != null) {clearTimeout(timeoutDisconnect);}
-			timeoutDisconnect = null;
-			
-
-			$.post('http://'+ip+'/reset?key='+key);
-			
-			key = null;
-
-			recordingResult = [];
-		}	// reset
 				
 		function doBlink(id) {
 			$("#"+id).fadeTo(500,0);
@@ -347,6 +487,68 @@
 				setTimeout(doBlink,750,id);
 			},500);
 		}
+
+
+		function handleError (err) {
+			switch (err) {
+				case "NOT_MOZ":
+					setResult("This test is engineered to be used on Firefox",false);
+					break;
+
+				case "MOZ_TOO_OLD":
+					setResult("Your version of Firefox is not up to date<br>"+
+						"Please update Firefox in <code>Help -> About Firefox</code>",false);
 		
+				case "AUDIO_ERROR":
+					setResult("No sound is captured<ul>"+
+						"<li>Check if your microphone is properly connected or muted</li>"+
+						"</ul>",false);
+					break;
+		
+				case "VIDEO_ERROR":
+					setResult("No video is captured<ul>"+
+						"<li>Check if your webcam is properly connected or disabled</li>"+
+						"</ul>",false);
+					break;
+		
+				case "PERMISSION_DENIED":
+					setResult("The acess to the imput devices has been denied<br><ul>"+
+						"<li>Check if there is any program that might block the use of the webcam</li>"+
+						"</ul>",false);
+					break;
+		
+				case "HARDWARE_UNAVAILABLE":
+					setResult("Your input device(s) is/are alerady in use<br><ul>"+
+						"<li>Close any other application that could use your webcam or microphone</li>"+
+						"</ul>",false);
+					break;
+
+				case "NO_DEVICES_FOUND":
+					setResult("Ther are no input devices detected<br><ul>"+
+						"<li>Verify that your webcam and microphone are properly plugged</li>"+
+						"<li>Make sure that the devices are not deactivated (Control pannel in Windows)</li>"+
+						"</ul>",false);
+					break;
+		
+				case "CONNECTION_ERROR":
+					setResult("Could not connect to internet, check your connection",false);
+					break;
+		
+				case "STUN_ERROR":
+					setResult("Could not connect to the stun server",false);
+					break;
+
+				case "TURN_ERROR":
+					setResult("Could not connect to the turn server",false);
+					break;
+					
+		
+				default:
+					setResult("The following error occured:<br>"+err,false);
+			}
+			throw "This is not an error: Stop js execution";
+		}
+
+
 	</script>
 </html>
