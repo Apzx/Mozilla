@@ -17,18 +17,20 @@ http.createServer(function (req, res) {
 	console.log("");
 	var url_parts = url.parse(req.url, true);
 
-	var key = url_parts.query.key;
+	var key = url_parts.query.key; // sets the request's key
+
+	// router depending on the url
 	switch(req.url.split("?")[0]) {
 		
-
+		// Bot's request on startup, gives him a key and stores him in bots array for keepalaves and capacity
+		// Need refactoring, from polling to SSE
 		case '/bot_connect':
-
 			console.log("Bot connection request recieved");
 			var botKey = Math.floor(Math.random()*1000000)*10+1;
 
 			bots[botKey] = {
 				"timeoutKeepAlive": null,
-				"capacity": parseInt(url_parts.query.capacity)
+				"capacity": parseInt(url_parts.query.capacity,10),
 			};
 
 			bots[botKey].timeoutKeepAlive = setTimeout(function(){
@@ -41,20 +43,21 @@ http.createServer(function (req, res) {
 			updateCapacity();
 			break;
 
+		// User's first request, sets up the SSE connection that will last until an answer is returned.
 		case "/user_connect":
-			console.log("User connection request recieved");
+			console.log("User connection request recieved for key: "+key);
 			catalog[key] = new UserLink(req, res, key);
-			catalog[key].sendEvent("connected");
+			catalog[key].sendEvent("connected"); // Notify the user he is connected
 			catalog[key].req.connection.addListener("close", function () {
 				delete catalog[key];
 				var tmp = queue.indexOf(key);
 				if (tmp != -1) {queue.splice(tmp, 1);}
 
 				console.log("Reset performed on key: "+key);
-			}, false);
+			});
 			break;
 
-
+		// As soon as the user is connected, he sends his offer, which is stored in a queue for the bots to be processed
 		case "/send_offer":
 			console.log("Offer received and sent to key: "+key);
 
@@ -77,28 +80,28 @@ http.createServer(function (req, res) {
 			});
 			break;
 
-
+		// Polling request from the bot, sends an offer if there is one and refreshes the keepalive
 		case "/ask_for_offer":
 			console.log("Got asked for offer");
-			if (typeof bots[key] == 'undefined') {
+			if (typeof bots[key] == 'undefined') { // the server reseted between this request and the connection. The bot reloads
 				res.writeHead(200, {'Content-Type': 'text/*'});
 				res.end('callback("reset_please")');
 			}
 			else {
 				var keyQ = queue.shift();
-				if (keyQ === undefined) {
+				if (keyQ === undefined) {  // no offer is sent
 					res.writeHead(200, {'Content-Type': 'text/*'});
 					res.end('callback("Nope.avi")');
 					console.log("Do not have one");
 				}
-				else {
+				else { // an offer is sent, and another polling request is immediately sent from the bot
 					res.writeHead(200, {'Content-Type': 'text/*'});
 
 					res.end('callback('+JSON.stringify({"key":keyQ,"offer":catalog[keyQ].offer})+')');
 					console.log("Offer sent");
 				}
 
-				clearTimeout(bots[key].timeoutKeepAlive);
+				clearTimeout(bots[key].timeoutKeepAlive); // refresh the keepalive
 
 				bots[key].timeoutKeepAlive = setTimeout(function() {
 					delete bots[key];
@@ -107,15 +110,15 @@ http.createServer(function (req, res) {
 			}
 			break;
 
-
+		// Polling without requesting an offer, refreshes the keepalive
 		case '/botKeepalive':
 			console.log("Keepalive recieved");
-			if (typeof bots[key] == 'undefined') {
+			if (typeof bots[key] == 'undefined') {	// the server reseted between this request and the connection. The bot reloads
 				res.writeHead(200, {'Content-Type': 'text/*'});
 				res.end('callback("reset_please")');
 			}
 			else {
-				clearTimeout(bots[key].timeoutKeepAlive);
+				clearTimeout(bots[key].timeoutKeepAlive); // refresh the keepalive
 
 				bots[key].timeoutKeepAlive = setTimeout(function() {
 					delete bots[key];
@@ -127,7 +130,7 @@ http.createServer(function (req, res) {
 			}
 			break;
 
-
+		// A bot finished processing an offer, and returns an answer. Sends the answer to the corresponding user and closes SSE
 		case "/send_answer":
 			console.log("Answer received for key: "+key);
 			var bodyAnswer = '';
@@ -145,7 +148,7 @@ http.createServer(function (req, res) {
 			});
 			break;
 			
-
+		// Reset request
 		case "/reset":
 			delete catalog[key];
 			var tmp = queue.indexOf(key);
@@ -163,6 +166,7 @@ http.createServer(function (req, res) {
 			res.end("Hey, kid, do you want some candy?");
 			break;
 
+		// router to the differents webpages
 		default:
 			var file = req.url.replace("/","");
 			console.log(file," requested");
@@ -186,7 +190,12 @@ http.createServer(function (req, res) {
 	
 }).listen(8080);
 
-
+/**
+ * Stores a SSE link to the user
+ * @param {Object} pReq; The SSE connection request
+ * @param {Object} pRes; The SSE connection result
+ * @param {String} pKey; User's key
+ */
 function UserLink(pReq,pRes,pKey) {
 	var that = this;
 
@@ -200,9 +209,12 @@ function UserLink(pReq,pRes,pKey) {
 
 	that.req.connection.addListener("close", function () {
 		delete that;
-	}, false);
+	});
 }
 
+/**
+ * Sends an update about the queue to the user
+ */
 UserLink.prototype.updateQueue = function() {
 	var that = this;
 	var tmp = {
@@ -213,6 +225,11 @@ UserLink.prototype.updateQueue = function() {
 	that.sendEvent("updateQueue",JSON.stringify(tmp));
 };
 
+/**
+ * Sends a custom event
+ * @param {String} eventName;  
+ * @param {String} eventData; 
+ */
 UserLink.prototype.sendEvent = function(eventName, eventData) {
 	var that = this;
 	that.res.write("event: "+eventName+"\n");
@@ -228,6 +245,9 @@ function isEmpty(obj) {
     return true;
 }
 
+/**
+ * Updates the server's full capacity
+ */
 function updateCapacity() {
 	var tmp = 0;
 	for (var i in bots){
