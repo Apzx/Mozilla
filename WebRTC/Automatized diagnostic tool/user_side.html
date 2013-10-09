@@ -127,7 +127,7 @@
 			navigator.mozGetUserMedia({video: true, audio: true},function(stream){
 				localStream = stream;
 				step.innerHTML = "";
-				localTest(localStream);
+				localTest();
 			},console.error);
 
 		};	//onload

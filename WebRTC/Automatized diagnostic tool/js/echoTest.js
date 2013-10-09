@@ -82,7 +82,6 @@ function echoTest() {
 
 	function playRemoteStream(event) {
 		setResult("Setting up dataChannel...");
-		console.log(event.stream); //Debug marker
 
 		remoteStream = event.stream;
 		
@@ -94,9 +93,7 @@ function echoTest() {
 
 
 
-	function onDataChannelMessage (event) {
-		console.log(event.data); //Debug marker
-		
+	function onDataChannelMessage (event) {		
 		if (event.data == "ping") {
 			dataChannel.send("pong");
 
