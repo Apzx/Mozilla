@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script type="text/javascript">
+
+      /**
+       * SETTINGS       
+       */
+
+      var MAX_NUMBER_OF_SIMULTANEOUS_CONNECTIONS = 2;
+      
+      var IP = window.location.host;
+
+      var RECORD_LENGTH = 5; // in seconds
+      var RECORD_FPS = 10;
+      var RECORD_HEIGHT = 120;
+      var RECORD_WIDTH = 160;
+
+    </script>
+    <meta charset=utf-8 />
+    <title>Bot-side</title>
+  </head>
+  <body id='body'>Bot connecting...</body>
+
+  <script src="js/lib/jQuery.min.js"></script>
+  <script src="js/bot_side.main.js"></script>
+  <script>
+
+    var localStream,
+      timeoutOffer,
+      botKey;
+
+
+    window.onload = initializeBot;
+  </script>
+</html>
